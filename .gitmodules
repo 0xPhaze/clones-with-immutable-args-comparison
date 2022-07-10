@@ -1,0 +1,9 @@
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/brockelmore/forge-std
+[submodule "lib/contracts"]
+	path = lib/fx-portal
+	url = https://github.com/fx-portal/contracts
+[submodule "lib/solmate"]
+	path = lib/solmate
+	url = https://github.com/rari-capital/solmate

@@ -5,7 +5,7 @@ import "forge-std/Script.sol";
 
 import "solmate/test/utils/mocks/MockERC721.sol";
 
-import "../src/Test.sol";
+// import "../src/Test.sol";
 
 /* 
 forge script script/GangWar.s.sol:Deploy --rpc-url $RINKEBY_RPC_URL  --private-key $PRIVATE_KEY --broadcast --verify --etherscan-api-key $ETHERSCAN_KEY -vvvv
@@ -14,7 +14,7 @@ forge script script/GangWar.s.sol:Deploy --rpc-url https://rpc.ankr.com/polygon 
 */
 
 contract Deploy is Script {
-    Test test;
+    // Test test;
 
     function run() external {
         vm.startBroadcast();

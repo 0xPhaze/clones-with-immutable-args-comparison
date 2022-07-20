@@ -1,7 +1,21 @@
 # Proxies With Immutable Args
 
-This is a library for deploying ERC1967 proxies (usable with UUPSUpgrade.sol)
+This is a library for deploying ERC1967 proxies (usable with UUPSUpgrade)
 that contain "immutable args".
+
+## Contracts
+
+```ml
+src
+├── ERC1967Proxy.sol - "ERC1967 proxy implementation"
+├── LibERC1967ProxyWithImmutableArgs.sol - "Library for deploying ERC1967 proxy implementation with immutable args"
+├── ProxyCreationCode.sol - "Contains helper functions for proxy bytecode creation"
+├── UUPSUpgrade.sol - "Minimal UUPS upgradeable contract"
+├── reference
+│   └── ERC1967ProxyWithImmutableArgs.sol - "Reference implementation for proxies with fixed immutable arg lengths"
+└── utils
+    └── utils.sol - "low-level utils"
+```
 
 ## Installation
 
@@ -12,16 +26,22 @@ forge install 0xPhaze/proxies-with-immutable-args
 
 ## Deploying a proxy with immutable args
 
+### Implementation
+
 To create and deploy the implementation contract, 
-it needs to inherit from {{UUPSUpgrade}}.
-The `_authorizeUpgrade` function needs to be protected.
-For that I am using {{UDS/auth/OwnableUDS.sol}}, which
+it needs to inherit from (./src/UUPSUpgrade.sol).
+
+The `_authorizeUpgrade` function needs to be overriden (and protected).
+For that I am using [OwnableUDS](https://github.com/0xPhaze/UDS/blob/master/src/auth/OwnableUDS.sol) and [InitializableUDS](https://github.com/0xPhaze/UDS/blob/master/src/auth/InitializableUDS.sol), which
 can be installed using
 ```sh
 forge install 0xPhaze/UDS
 ```
 
-```sol
+An upgradeable contract that implements the basic necessities can look like this.
+For more info, have a look at [UDS](https://github.com/0xPhaze/UDS).
+
+```solidity
 import {UUPSUpgrade} from "/UUPSUpgrade.sol";
 
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
@@ -36,10 +56,14 @@ contract Logic is UUPSUpgrade, InitializableUDS, OwnableUDS {
 }
 ```
 
-To deploy a proxy, call `LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs`.
-This returns an address, which can be casted to the appropriate type.
+### Proxy
 
-```sol
+To deploy a proxy, call `LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs`. This can be done directly through [Solidity Scripting](https://book.getfoundry.sh/tutorials/solidity-scripting) using Foundry,
+a `ProxyFactory` contract, or by simply sending the creation code from some account
+as a transaction.
+The returned address can casted to the appropriate contract type of the implementation.
+
+```solidity
 import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
 
 contract ProxyFactory {
@@ -57,21 +81,38 @@ contract ProxyFactory {
 }
 ```
 
+### Packing and Reading Args
 
+`immutableArgs` can be tightly packed arguments.
 
-## Contracts
-
-```ml
-src
-├── ERC1967Proxy.sol - "ERC1967 proxy implementation"
-├── LibERC1967ProxyWithImmutableArgs.sol - "Library for deploying ERC1967 proxy implementation with immutable args"
-├── ProxyCreationCode.sol - "Contains helper functions for proxy bytecode creation"
-├── UUPSUpgrade.sol - "Minimal UUPS upgradeable contract"
-├── reference
-│   └── ERC1967ProxyWithImmutableArgs.sol - "Reference implementation for proxies with fixed immutable arg lengths"
-└── utils
-    └── utils.sol - "low-level utils"
+```solidity
+address addr = ...
+uint40 timestamp = ...
+bytes memory immutableArgs = abi.encodePacked(addr, timestamp);
 ```
+
+`LibERC1967ProxyWithImmutableArgs` contains helper functions in order to read out an immutable arg.
+The offset is the bytes position in the tightly packed bytes array.
+
+```solidity
+contract Logic is UUPSUpgrade {
+    ...
+
+    function testArgs() public {
+        address addr = LibERC1967ProxyWithImmutableArgs.getArgAddress(0);
+        uint40 timestamp = LibERC1967ProxyWithImmutableArgs.getArgUint40(20);
+
+        ...
+    }
+}
+```
+
+Currently there is no validation to whether this extra calldata is actually present
+when trying to read immutable args from calldata. 
+Attempting to read these from a proxy that doesn't append any, would lead to errors
+or incorrect data being returned!
+
+
 
 ## ERC1967 Specs
 
@@ -94,9 +135,6 @@ Currently there is no validation to whether this extra calldata is actually pres
 when trying to read immutable args from calldata. 
 Attempting to read these from a proxy that doesn't append any, would lead to errors
 or incorrect data being returned!
-
-For a more user-friendly library and to see some examples of how these are meant to be used,
-see [UDS](https://github.com/0xPhaze/UDS).
 
 ## WIP (Work in Progress)
 

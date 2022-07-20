@@ -19,7 +19,6 @@ contract MockUUPSUpgradeWithImmutableArgs is MockUUPSUpgrade {
         return LibERC1967ProxyWithImmutableArgs.getArgBytes32(64);
     }
 
-    // @note should be bytes ??
     function getArg(uint256 argOffset, uint256 argLen) public pure returns (uint256) {
         return LibERC1967ProxyWithImmutableArgs.getArg(argOffset, argLen);
     }

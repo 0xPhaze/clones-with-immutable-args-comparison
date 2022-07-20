@@ -28,24 +28,14 @@ forge install 0xPhaze/proxies-with-immutable-args
 
 ### Implementation
 
-To create and deploy the implementation contract, 
-it needs to inherit from (./src/UUPSUpgrade.sol).
-
-The `_authorizeUpgrade` function needs to be overriden (and protected).
-For that I am using [OwnableUDS](https://github.com/0xPhaze/UDS/blob/master/src/auth/OwnableUDS.sol) and [InitializableUDS](https://github.com/0xPhaze/UDS/blob/master/src/auth/InitializableUDS.sol), which
-can be installed using
-```sh
-forge install 0xPhaze/UDS
-```
-
-An upgradeable contract that implements the basic necessities can look like this.
-For more info, have a look at [UDS](https://github.com/0xPhaze/UDS).
+The implementation contract, needs inherit from [UUPSUpgrade](./src/UUPSUpgrade.sol).
+The `_authorizeUpgrade` function must be overriden (and protected).
 
 ```solidity
-import {UUPSUpgrade} from "/UUPSUpgrade.sol";
-
 import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
 import {InitializableUDS} from "UDS/auth/InitializableUDS.sol";
+
+import {UUPSUpgrade} from "/UUPSUpgrade.sol";
 
 contract Logic is UUPSUpgrade, InitializableUDS, OwnableUDS {
     function init() public initializer {
@@ -56,12 +46,19 @@ contract Logic is UUPSUpgrade, InitializableUDS, OwnableUDS {
 }
 ```
 
+The example uses [OwnableUDS](https://github.com/0xPhaze/UDS/blob/master/src/auth/OwnableUDS.sol) and [InitializableUDS](https://github.com/0xPhaze/UDS/blob/master/src/auth/InitializableUDS.sol).
+These can be installed via
+```sh
+forge install 0xPhaze/UDS
+```
+For more info on upgradeable proxies, have a look at [UDS](https://github.com/0xPhaze/UDS).
+
 ### Proxy
 
 To deploy a proxy, call `LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs`. This can be done directly through [Solidity Scripting](https://book.getfoundry.sh/tutorials/solidity-scripting) using Foundry,
 a `ProxyFactory` contract, or by simply sending the creation code from some account
 as a transaction.
-The returned address can casted to the appropriate contract type of the implementation.
+The returned address can be casted to the appropriate contract type of the implementation.
 
 ```solidity
 import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
@@ -83,22 +80,22 @@ contract ProxyFactory {
 
 ### Packing and Reading Args
 
-`immutableArgs` can be tightly packed arguments.
+`immutableArgs` can contain tightly packed arguments.
 
 ```solidity
-address addr = ...
-uint40 timestamp = ...
+address addr = address(0x1337);
+uint40 timestamp = 12345;
 bytes memory immutableArgs = abi.encodePacked(addr, timestamp);
 ```
 
-`LibERC1967ProxyWithImmutableArgs` contains helper functions in order to read out an immutable arg.
-The offset is the bytes position in the tightly packed bytes array.
+`LibERC1967ProxyWithImmutableArgs` contains helper functions for reading out immutable args.
+The offset argument is the bytes position in the tightly packed bytes array.
 
 ```solidity
 contract Logic is UUPSUpgrade {
     ...
 
-    function testArgs() public {
+    function testReadArgs() public {
         address addr = LibERC1967ProxyWithImmutableArgs.getArgAddress(0);
         uint40 timestamp = LibERC1967ProxyWithImmutableArgs.getArgUint40(20);
 
@@ -107,16 +104,15 @@ contract Logic is UUPSUpgrade {
 }
 ```
 
-Currently there is no validation to whether this extra calldata is actually present
+Currently there is no validation for whether this extra calldata is actually present
 when trying to read immutable args from calldata. 
 Attempting to read these from a proxy that doesn't append any, would lead to errors
 or incorrect data being returned!
 
 
-
 ## ERC1967 Specs
 
-During upgrade & initialization (see [implementation reference](./src/ERC1967Proxy.sol)):
+During upgrade & initialization (see [ERC1967Proxy](./src/ERC1967Proxy.sol)):
 - implementation code length is checked
 - implementation uuid is verified
 - `Upgraded` event is emitted
@@ -131,20 +127,18 @@ the calldata, along with 2 extra bytes that signal the length of the immutable d
 This extra calldata generally (unless they explicitly read calldata) does not interfere with the usual control flow of 
 contracts and can be seen as optional calldata/arguments. 
 
-Currently there is no validation to whether this extra calldata is actually present
-when trying to read immutable args from calldata. 
-Attempting to read these from a proxy that doesn't append any, would lead to errors
-or incorrect data being returned!
+There is no validation for whether this extra calldata is actually present.
 
 ## WIP (Work in Progress)
 
 This work is mostly for fun and for better understanding the EVM.
 The goal is to create multiple different versions and test their deployment costs 
-and extra calldata costs for delegatecalls. A next version for comparison could, for example only read immutable args
-through codecopy, instead of appending these to calldata.
+and extra calldata costs for delegatecalls. 
+A different version could, for example only read immutable args
+through extcodecopy, instead of appending these to calldata.
 
 Further todos:
-- expand test cases for bytecode created proxy
+- expand test cases
 - clean up code
 - go play some golf
 
@@ -152,13 +146,14 @@ Further todos:
 
 These contracts are a work in progress and should not be used in production. Use at your own risk.
 The test cases are meant to pin down proper specification.
-Though some can be extended (for example reaching the limit on extra data).
+Deploying very large immutable args has not been extensively tested 
+(though the fuzzer didn't complain so far).
 
 Using proxies with fixed bytes32 args is relatively safe,
-as the code is simple (see [reference implementation](./src/reference/ERC1967ProxyWithImmutableArgs.sol)).
+as the code is directly obtained from compiled solidity code (see [reference implementation](./src/reference/ERC1967ProxyWithImmutableArgs.sol)).
 
 There be dragons, however, for the proxy deployed by [hand-crafted bytecode](./src/ProxyCreationCode.sol).
-I would not trust this for any arg code lengths until further testing has been done.
+Do not trust this for any arg lengths until further testing has been done.
 
 
 ## Acknowledgements

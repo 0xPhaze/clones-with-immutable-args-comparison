@@ -39,11 +39,7 @@ contract TestImmutableArgs is Test {
 
     function testFuzz_getFullCalldata(bytes memory immutableArgs) public {
         Logic proxy = Logic(
-            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
-                address(logic),
-                "",
-                abi.encodePacked(immutableArgs)
-            )
+            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(address(logic), "", immutableArgs)
         );
 
         bytes memory fullCalldata = proxy.getFullCalldata();
@@ -56,11 +52,7 @@ contract TestImmutableArgs is Test {
 
     function testFuzz_getFullCalldataXtra(bytes memory immutableArgs, bytes memory randomCalldata) public {
         Logic proxy = Logic(
-            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
-                address(logic),
-                "",
-                abi.encodePacked(immutableArgs)
-            )
+            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(address(logic), "", immutableArgs)
         );
 
         bytes memory fullCalldata = proxy.getFullCalldataXtra(randomCalldata);

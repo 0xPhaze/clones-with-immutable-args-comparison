@@ -10,6 +10,55 @@ Install with [Foundry](https://github.com/foundry-rs/foundry)
 forge install 0xPhaze/proxies-with-immutable-args
 ```
 
+## Deploying a proxy with immutable args
+
+To create and deploy the implementation contract, 
+it needs to inherit from {{UUPSUpgrade}}.
+The `_authorizeUpgrade` function needs to be protected.
+For that I am using {{UDS/auth/OwnableUDS.sol}}, which
+can be installed using
+```sh
+forge install 0xPhaze/UDS
+```
+
+```sol
+import {UUPSUpgrade} from "/UUPSUpgrade.sol";
+
+import {OwnableUDS} from "UDS/auth/OwnableUDS.sol";
+import {InitializableUDS} from "UDS/auth/InitializableUDS.sol";
+
+contract Logic is UUPSUpgrade, InitializableUDS, OwnableUDS {
+    function init() public initializer {
+        __Ownable_init();
+    }
+
+    function _authorizeUpgrade() internal override onlyOwner {}
+}
+```
+
+To deploy a proxy, call `LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs`.
+This returns an address, which can be casted to the appropriate type.
+
+```sol
+import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
+
+contract ProxyFactory {
+    function deployProxy(
+        address implementation, 
+        bytes memory initCalldata, 
+        bytes memory immutableArgs
+    ) public returns (address) {
+        return LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
+            implementation,
+            initCalldata,
+            immutableArgs
+        )
+    }
+}
+```
+
+
+
 ## Contracts
 
 ```ml

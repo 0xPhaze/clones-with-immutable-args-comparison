@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "forge-std/console.sol";
-
 import {verifyIsProxiableContract, proxyRuntimeCode, proxyCreationCode} from "./ProxyCreationCode.sol";
 
 /// @title Library for deploying ERC1967 proxies with immutable args

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {ERC1967_PROXY_STORAGE_SLOT} from "/ERC1967Proxy.sol";
 import {UUPSUpgrade} from "/UUPSUpgrade.sol";
-import {utils} from "/utils/utils.sol";
+import {utils} from "../utils/utils.sol";
 
 contract MockUUPSUpgrade is UUPSUpgrade {
     uint256 public immutable version;

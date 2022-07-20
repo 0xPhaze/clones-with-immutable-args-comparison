@@ -2,7 +2,9 @@
 pragma solidity ^0.8.0;
 
 import {Test, console} from "forge-std/Test.sol";
+
 import {utils} from "/utils/utils.sol";
+import {ProxyTestDeployer} from "./utils/ProxyTestDeployer.sol";
 
 import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
 import {MockUUPSUpgradeWithImmutableArgs as Logic} from "./mocks/MockUUPSUpgradeWithImmutableArgs.sol";
@@ -33,6 +35,45 @@ contract TestImmutableArgs is Test {
 
         // store argLen-masked arg in encoded calldata location at offset
         utils.mstore(utils.mloc(args) + 32 + offset, bytes32(arg << (256 - 8 * argLen)), argLen);
+    }
+
+    function testFuzz_getFullCalldata(bytes memory immutableArgs) public {
+        Logic proxy = Logic(
+            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
+                address(logic),
+                "",
+                abi.encodePacked(immutableArgs)
+            )
+        );
+
+        bytes memory fullCalldata = proxy.getFullCalldata();
+
+        assertEq(
+            fullCalldata,
+            abi.encodePacked(proxy.getFullCalldata.selector, immutableArgs, uint16(immutableArgs.length))
+        );
+    }
+
+    function testFuzz_getFullCalldataXtra(bytes memory immutableArgs, bytes memory randomCalldata) public {
+        Logic proxy = Logic(
+            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
+                address(logic),
+                "",
+                abi.encodePacked(immutableArgs)
+            )
+        );
+
+        bytes memory fullCalldata = proxy.getFullCalldataXtra(randomCalldata);
+
+        assertEq(
+            fullCalldata,
+            abi.encodePacked(
+                proxy.getFullCalldataXtra.selector,
+                abi.encode(randomCalldata),
+                immutableArgs,
+                uint16(immutableArgs.length)
+            )
+        );
     }
 
     /* ------------- getArg() ------------- */
@@ -451,7 +492,7 @@ contract TestImmutableArgs is Test {
 import {TestUUPSUpgrade, LogicV1, LogicV2} from "./UUPSUpgrade.t.sol";
 
 contract TestUUPSUpgradeWithImmutableArgs is TestUUPSUpgrade {
-    function deployProxy(address implementation, bytes memory initCalldata) internal override returns (address) {
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
         return
             LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
                 implementation,
@@ -462,7 +503,7 @@ contract TestUUPSUpgradeWithImmutableArgs is TestUUPSUpgrade {
 }
 
 contract TestUUPSUpgradeWith3ImmutableArgs is TestUUPSUpgrade {
-    function deployProxy(address implementation, bytes memory initCalldata) internal override returns (address) {
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
         return
             LibERC1967ProxyWithImmutableArgs.deployProxyVerifiable(
                 implementation,
@@ -475,7 +516,7 @@ contract TestUUPSUpgradeWith3ImmutableArgs is TestUUPSUpgrade {
 }
 
 contract TestUUPSUpgradeWith2ImmutableArgs is TestUUPSUpgrade {
-    function deployProxy(address implementation, bytes memory initCalldata) internal override returns (address) {
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
         return
             LibERC1967ProxyWithImmutableArgs.deployProxyVerifiable(
                 implementation,
@@ -487,7 +528,79 @@ contract TestUUPSUpgradeWith2ImmutableArgs is TestUUPSUpgrade {
 }
 
 contract TestUUPSUpgradeWith1ImmutableArgs is TestUUPSUpgrade {
-    function deployProxy(address implementation, bytes memory initCalldata) internal override returns (address) {
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
         return LibERC1967ProxyWithImmutableArgs.deployProxyVerifiable(implementation, initCalldata, keccak256("arg1"));
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// re-run all tests from "./ERC1967.t.sol" for all proxy types
+// - these tests need to be run from a `Deployer` contract,
+//   so that forge can catch the reverts on external calls
+// ---------------------------------------------------------------------------------------
+
+import {TestERC1967} from "./ERC1967.t.sol";
+
+contract TestERC1967WithImmutableArgs is TestERC1967 {
+    ProxyTestDeployer deployer;
+
+    function setUp() public override {
+        super.setUp();
+        deployer = new ProxyTestDeployer();
+    }
+
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
+        return
+            deployer.deployProxyWithImmutableArgs(
+                implementation,
+                initCalldata,
+                abi.encode(keccak256("arg1"), keccak256("arg2"), keccak256("arg3"))
+            );
+    }
+}
+
+contract TestERC1967With3ImmutableArgs is TestERC1967 {
+    ProxyTestDeployer deployer;
+
+    function setUp() public override {
+        super.setUp();
+        deployer = new ProxyTestDeployer();
+    }
+
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
+        return
+            deployer.deployProxyVerifiable(
+                implementation,
+                initCalldata,
+                keccak256("arg1"),
+                keccak256("arg2"),
+                keccak256("arg3")
+            );
+    }
+}
+
+contract TestERC1967With2ImmutableArgs is TestERC1967 {
+    ProxyTestDeployer deployer;
+
+    function setUp() public override {
+        super.setUp();
+        deployer = new ProxyTestDeployer();
+    }
+
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
+        return deployer.deployProxyVerifiable(implementation, initCalldata, keccak256("arg1"), keccak256("arg2"));
+    }
+}
+
+contract TestERC1967With1ImmutableArgs is TestERC1967 {
+    ProxyTestDeployer deployer;
+
+    function setUp() public override {
+        super.setUp();
+        deployer = new ProxyTestDeployer();
+    }
+
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
+        return deployer.deployProxyVerifiable(implementation, initCalldata, keccak256("arg1"));
     }
 }

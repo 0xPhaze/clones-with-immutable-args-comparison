@@ -20,21 +20,21 @@ function verifyIsProxiableContract(address implementation) view {
     if (uuid != ERC1967_PROXY_STORAGE_SLOT) revert InvalidUUID();
 }
 
-/// @dev expects implementation to be on top of the stack
-/// @dev must leave a copy of implementation on top of the stack
-function initCallcode(
-    uint256 pc,
-    bytes memory initCalldata
-) pure returns (bytes memory code) {
+/// @dev Expects `implementation` (imp) to be on top of the stack
+/// @dev Must leave a copy of `implementation` (imp) on top of the stack
+/// @param pc program counter, used for calculating offsets
+function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes memory code) {
     uint256 initCalldataSize = initCalldata.length;
 
     if (initCalldataSize != 0) {
 
         code = abi.encodePacked(
             // push initCalldata to stack in 32 bytes chunks and store in memory at pos 0 
+
             MSTORE(0, initCalldata),                    // MSTORE icd       |                           | [0, ics) = initcalldata
 
             /// let success := delegatecall(gas(), implementation, 0, initCalldataSize, 0, 0)
+
             hex"3d"                                     // RETURNDATASIZE   | 00  imp                   | [0, ics) = initcalldata
             hex"3d",                                    // RETURNDATASIZE   | 00  00  imp               | [0, ics) = initcalldata
             PUSHX(initCalldataSize),                    // PUSHX ics        | ics 00  00  imp           | [0, ics) = initcalldata
@@ -44,16 +44,16 @@ function initCallcode(
             hex"f4"                                     // DELEGATECALL     | scs imp                   | ...
         );
 
+        // advance program counter
         pc += code.length;
 
-        code = abi.encodePacked(
-            code,
-
+        code = abi.encodePacked(code,
             /// if iszero(success) { revert(0, returndatasize()) }
+
             REVERT_ON_FAILURE(pc)                       //                  | imp                       | ...
+            // RETURN_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
         );
     }
-
 }
 
 /// @notice Returns the creation code for an ERC1967 proxy with immutable args (max. 2^16 - 1 bytes)
@@ -65,7 +65,6 @@ function proxyCreationCode(
     bytes memory runtimeCode,
     bytes memory initCalldata
 ) pure returns (bytes memory creationCode) {
-
     // program counter
     uint256 pc = 0;
 
@@ -82,16 +81,17 @@ function proxyCreationCode(
 
     pc = creationCode.length;
 
-    // optional: insert code to call implementation contract with initCalldata
+    // optional: insert code to call implementation contract with initCalldata during contract creation
     if (initCalldata.length != 0) {
         bytes memory callcode = initCallcode(pc, initCalldata);
 
         creationCode = abi.encodePacked(creationCode, callcode);
+
+        pc = creationCode.length;
     }
 
-    pc = creationCode.length;
 
-    // runtimeOffset = size of next block + pc / creationcode size so far
+    // runtimeOffset: offset from which to copy the runtime code = pc + size of next block
     uint16 rto = uint16(pc + 45);
 
     uint256 runtimeSize = runtimeCode.length; // runtime code is concatenated with args
@@ -140,8 +140,9 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
 
     uint8 argsCodeOffset = 0x48; // length of the runtime code
 
-    // @note: uses codecopy, room to optimize by directly
-    // encoding immutableArgs into bytecode
+    uint8 returnJumpLocation = argsCodeOffset - 5;
+
+    // @note: uses codecopy, room to optimize by directly encoding immutableArgs into bytecode
     runtimeCode = abi.encodePacked(
         /// calldatacopy(0, 0, calldatasize())
 
@@ -150,10 +151,7 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
         hex"3d"                                     // RETURNDATASIZE   | 00  00  cds               |
         hex"37"                                     // CALLDATACOPY     |                           | [0, cds) = calldata
 
-
         /// codecopy(calldatasize(), argsCodeOffset, extraDataSize)
-
-
 
         hex"61", extraDataSize,                     // PUSH2 xds        | xds                       | [0, cds) = calldata
         hex"60", argsCodeOffset,                    // PUSH1 aco        | aco xds                   | [0, cds) = calldata
@@ -184,7 +182,7 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
 
         /// if success { jump(rtn) }
 
-        hex"60", argsCodeOffset - 5,                // PUSH1 rtn        | rtn scs                   | [0, rds) = returndata
+        hex"60", returnJumpLocation,                // PUSH1 rtn        | rtn scs                   | [0, rds) = returndata
         hex"57"                                     // JUMPI            |                           | [0, rds) = returndata
 
         /// revert(0, returndatasize())
@@ -198,34 +196,42 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
         hex"5b"                                     // JUMPDEST         |                           | [0, rds) = returndata
         hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds) = returndata
         hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0, rds) = returndata
-        hex"f3",                                    // RETURN           |                           | 
+        hex"f3",                                    // RETURN           |                           | ...
 
-        // append args and extraDataSize
+        // unreachable code: 
+        // append args and args length for later use
+
         args,
         uint16(args.length)
 
     ); // prettier-ignore
 
-    // validation for jump locations
-    if (runtimeCode.length - extraDataSize != argsCodeOffset) revert InvalidOffset(argsCodeOffset, runtimeCode.length);
+    // sanity check for for jump locations
+    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset, runtimeCode.length);
 }
 
 // ---------------------------------------------
 // Snippets
 // ---------------------------------------------
 
-/// @notice expects call `success` bool to be on top of stack
+/// @notice expects call `success` (scs) bool to be on top of stack
 function REVERT_ON_FAILURE(uint256 pc) pure returns (bytes memory code) {
-
     // upper bound for when end location requires 32 bytes
-    uint256 pushNumBytes = getRequiredBytes(pc + 38);
-    uint256 end = pc + pushNumBytes + 6;
+    uint256 pushNumBytes = utils.getRequiredBytes(pc + 38);
+    uint256 end = pc + pushNumBytes + 11;
 
     code = abi.encodePacked(
         /// if success { jump(end) }
 
         PUSHX(end, pushNumBytes),                   // PUSH1 end        | end scs 
         hex"57"                                     // JUMPI            |         
+
+        /// returndatacopy(0, 0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | ...
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | ...
+        hex"80"                                     // DUP1             | 00  00  rds               | ...
+        hex"3e"                                     // RETURNDATACOPY   |                           | [0, rds) = returndata
 
         /// revert(0, returndatasize())
 
@@ -236,6 +242,51 @@ function REVERT_ON_FAILURE(uint256 pc) pure returns (bytes memory code) {
         hex"5b"                                     // JUMPDEST         | 
     );
 }
+
+/// @notice expects call `success` (scs) bool to be on top of stack
+/// @notice using this for testing
+// apparently you can't revert any returndata 
+// messages when using CREATE (returndatasize() is always 0)
+// that's why I'm encoding it in the returndata
+function RETURN_ON_FAILURE_TEST(uint256 pc) pure returns (bytes memory code) {
+    // upper bound for when end location requires 32 bytes
+    uint256 pushNumBytes = utils.getRequiredBytes(pc + 38);
+    // uint256 end = pc + pushNumBytes + 51;
+    uint256 end = pc + pushNumBytes + 19;
+
+    code = abi.encodePacked(
+        /// if success { jump(end) }
+
+        PUSHX(end, pushNumBytes),                   // PUSH1 end        | end scs 
+        hex"57"                                     // JUMPI            |         
+
+        /// mstore(0, 0)
+
+        hex"60" hex"00"
+        hex"80" 
+        hex"52"
+
+
+        /// returndatacopy(1, 0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | ...
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | ...
+        hex"60" hex"01"                             // PUSH1 01         | 01  00  rds               | ...
+        hex"3e"                                     // RETURNDATACOPY   |                           | [0] = wtf (identifier for reverting call)
+
+
+        /// return(0, 1 + returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds + 20) = encoded returndata
+        hex"60" hex"01"                             // PUSH1 01         | 01  rds                   | [0, rds + 20) = encoded returndata
+        hex"01"                                     // ADD              | eds                       | [0, rds + 20) = encoded returndata
+        hex"60" hex"00"                             // PUSH1 00         | 00  eds
+        hex"f3"                                     // RETURN           |        
+
+        hex"5b"                                     // JUMPDEST         | 
+    );
+}
+
 
 /// @notice Crude mstore that copies bytes to memory offset in chunks of 32
 function MSTORE(uint256 offset, bytes memory data) pure returns (bytes memory code) {
@@ -254,44 +305,11 @@ function MSTORE(uint256 offset, bytes memory data) pure returns (bytes memory co
     }
 }
 
-function getRequiredBytes(uint256 value) pure returns (uint256) {
-    if (value >> 8 == 0) return 1;
-    else if (value >> 16 == 0) return 2;
-    else if (value >> 24 == 0) return 3;
-    else if (value >> 32 == 0) return 4;
-    else if (value >> 40 == 0) return 5;
-    else if (value >> 48 == 0) return 6;
-    else if (value >> 56 == 0) return 7;
-    else if (value >> 64 == 0) return 8;
-    else if (value >> 72 == 0) return 9;
-    else if (value >> 80 == 0) return 10;
-    else if (value >> 88 == 0) return 11;
-    else if (value >> 96 == 0) return 12;
-    else if (value >> 104 == 0) return 13;
-    else if (value >> 112 == 0) return 14;
-    else if (value >> 120 == 0) return 15;
-    else if (value >> 128 == 0) return 16;
-    else if (value >> 136 == 0) return 17;
-    else if (value >> 144 == 0) return 18;
-    else if (value >> 152 == 0) return 19;
-    else if (value >> 160 == 0) return 20;
-    else if (value >> 168 == 0) return 21;
-    else if (value >> 176 == 0) return 22;
-    else if (value >> 184 == 0) return 23;
-    else if (value >> 192 == 0) return 24;
-    else if (value >> 200 == 0) return 25;
-    else if (value >> 208 == 0) return 26;
-    else if (value >> 216 == 0) return 27;
-    else if (value >> 224 == 0) return 28;
-    else if (value >> 232 == 0) return 29;
-    else if (value >> 240 == 0) return 30;
-    else if (value >> 248 == 0) return 31;
-    return 32;
+function PUSHX(uint256 value) pure returns (bytes memory code) {
+    return PUSHX(value, utils.getRequiredBytes(value));
 }
 
-
 function PUSHX(uint256 value, uint256 numBytes) pure returns (bytes memory code) {
-
     if (numBytes == 1) code = abi.encodePacked(hex"60", uint8(value));
     else if (numBytes == 2) code = abi.encodePacked(hex"61", uint16(value));
     else if (numBytes == 3) code = abi.encodePacked(hex"62", uint24(value));
@@ -325,40 +343,3 @@ function PUSHX(uint256 value, uint256 numBytes) pure returns (bytes memory code)
     else if (numBytes == 31) code = abi.encodePacked(hex"7e", uint248(value));
     else if (numBytes == 32) code = abi.encodePacked(hex"7f", uint256(value));
 }
-
-function PUSHX(uint256 value) pure returns (bytes memory code) {
-
-    if (value >> 8 == 0) code = abi.encodePacked(hex"60", uint8(value));
-    else if (value >> 16 == 0) code = abi.encodePacked(hex"61", uint16(value));
-    else if (value >> 24 == 0) code = abi.encodePacked(hex"62", uint24(value));
-    else if (value >> 32 == 0) code = abi.encodePacked(hex"63", uint32(value));
-    else if (value >> 40 == 0) code = abi.encodePacked(hex"64", uint40(value));
-    else if (value >> 48 == 0) code = abi.encodePacked(hex"65", uint48(value));
-    else if (value >> 56 == 0) code = abi.encodePacked(hex"66", uint56(value));
-    else if (value >> 64 == 0) code = abi.encodePacked(hex"67", uint64(value));
-    else if (value >> 72 == 0) code = abi.encodePacked(hex"68", uint72(value));
-    else if (value >> 80 == 0) code = abi.encodePacked(hex"69", uint80(value));
-    else if (value >> 88 == 0) code = abi.encodePacked(hex"6a", uint88(value));
-    else if (value >> 96 == 0) code = abi.encodePacked(hex"6b", uint96(value));
-    else if (value >> 104 == 0) code = abi.encodePacked(hex"6c", uint104(value));
-    else if (value >> 112 == 0) code = abi.encodePacked(hex"6d", uint112(value));
-    else if (value >> 120 == 0) code = abi.encodePacked(hex"6e", uint120(value));
-    else if (value >> 128 == 0) code = abi.encodePacked(hex"6f", uint128(value));
-    else if (value >> 136 == 0) code = abi.encodePacked(hex"70", uint136(value));
-    else if (value >> 144 == 0) code = abi.encodePacked(hex"71", uint144(value));
-    else if (value >> 152 == 0) code = abi.encodePacked(hex"72", uint152(value));
-    else if (value >> 160 == 0) code = abi.encodePacked(hex"73", uint160(value));
-    else if (value >> 168 == 0) code = abi.encodePacked(hex"74", uint168(value));
-    else if (value >> 176 == 0) code = abi.encodePacked(hex"75", uint176(value));
-    else if (value >> 184 == 0) code = abi.encodePacked(hex"76", uint184(value));
-    else if (value >> 192 == 0) code = abi.encodePacked(hex"77", uint192(value));
-    else if (value >> 200 == 0) code = abi.encodePacked(hex"78", uint200(value));
-    else if (value >> 208 == 0) code = abi.encodePacked(hex"79", uint208(value));
-    else if (value >> 216 == 0) code = abi.encodePacked(hex"7a", uint216(value));
-    else if (value >> 224 == 0) code = abi.encodePacked(hex"7b", uint224(value));
-    else if (value >> 232 == 0) code = abi.encodePacked(hex"7c", uint232(value));
-    else if (value >> 240 == 0) code = abi.encodePacked(hex"7d", uint240(value));
-    else if (value >> 248 == 0) code = abi.encodePacked(hex"7e", uint248(value));
-    else if (value >> 256 == 0) code = abi.encodePacked(hex"7f", uint256(value));
-}
-

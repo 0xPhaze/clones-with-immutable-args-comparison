@@ -123,4 +123,15 @@ library utils {
             mstore(add(offset, rel_ptr), or(and(chunk, not(mask)), and(prev_data, mask)))
         }
     }
+
+    function getRequiredBytes(uint256 value) internal pure returns (uint256) {
+        uint256 numBytes = 1;
+
+        for (; numBytes < 32; ++numBytes) {
+            value = value >> 8;
+            if (value == 0) break;
+        }
+
+        return numBytes;
+    }
 }

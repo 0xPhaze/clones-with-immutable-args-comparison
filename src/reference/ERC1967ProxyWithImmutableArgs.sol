@@ -4,8 +4,8 @@ pragma solidity =0.8.13;
 import "../ERC1967Proxy.sol";
 
 bytes32 constant arg1 = 0x1111111111111111aaaaaaaaaaaaaaaa1111111111111111aaaaaaaaaaaaaaaa;
-bytes32 constant arg2 = 0x2222222222222222aaaaaaaaaaaaaaaa2222222222222222aaaaaaaaaaaaaaaa;
-bytes32 constant arg3 = 0x3333333333333333aaaaaaaaaaaaaaaa3333333333333333aaaaaaaaaaaaaaaa;
+bytes32 constant arg2 = 0x2222222222222222bbbbbbbbbbbbbbbb2222222222222222bbbbbbbbbbbbbbbb;
+bytes32 constant arg3 = 0x3333333333333333cccccccccccccccc3333333333333333cccccccccccccccc;
 
 /// @title ERC1967 Proxy With 3 Immutable Args
 /// @author phaze (https://github.com/0xPhaze/proxies-with-immutable-args)
@@ -18,12 +18,12 @@ contract ERC1967ProxyWith3ImmutableArgs is ERC1967 {
 
     fallback() external payable {
         assembly {
+            calldatacopy(0, 0, calldatasize())
+
             mstore(calldatasize(), arg1)
             mstore(add(calldatasize(), 0x20), arg2)
             mstore(add(calldatasize(), 0x40), arg3)
             mstore(add(calldatasize(), 0x60), shl(240, 0x60))
-
-            calldatacopy(0, 0, calldatasize())
 
             let success := delegatecall(gas(), sload(ERC1967_PROXY_STORAGE_SLOT), 0, add(calldatasize(), 0x62), 0, 0)
 
@@ -49,11 +49,11 @@ contract ERC1967ProxyWith2ImmutableArgs is ERC1967 {
 
     fallback() external payable {
         assembly {
+            calldatacopy(0, 0, calldatasize())
+
             mstore(calldatasize(), arg1)
             mstore(add(calldatasize(), 0x20), arg2)
             mstore(add(calldatasize(), 0x40), shl(240, 0x40))
-
-            calldatacopy(0, 0, calldatasize())
 
             let success := delegatecall(gas(), sload(ERC1967_PROXY_STORAGE_SLOT), 0, add(calldatasize(), 0x42), 0, 0)
 
@@ -79,10 +79,10 @@ contract ERC1967ProxyWith1ImmutableArgs is ERC1967 {
 
     fallback() external payable {
         assembly {
+            calldatacopy(0, 0, calldatasize())
+
             mstore(calldatasize(), arg1)
             mstore(add(calldatasize(), 0x20), shl(240, 0x20))
-
-            calldatacopy(0, 0, calldatasize())
 
             let success := delegatecall(gas(), sload(ERC1967_PROXY_STORAGE_SLOT), 0, add(calldatasize(), 0x22), 0, 0)
 

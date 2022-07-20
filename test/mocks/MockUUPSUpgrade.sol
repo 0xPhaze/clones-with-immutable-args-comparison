@@ -12,11 +12,6 @@ contract MockUUPSUpgrade is UUPSUpgrade {
         version = version_;
     }
 
-    function upgradeTo(address logic) external {
-        _authorizeUpgrade();
-        _upgradeToAndCall(logic, "");
-    }
-
     function implementation() public view returns (address impl) {
         assembly {
             impl := sload(ERC1967_PROXY_STORAGE_SLOT)

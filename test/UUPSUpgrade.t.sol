@@ -8,8 +8,10 @@ import {MockUUPSUpgrade} from "./mocks/MockUUPSUpgrade.sol";
 import "/ERC1967Proxy.sol";
 
 // -----------------------------------------------------
-// Helpers
+// Mock Logic
 // -----------------------------------------------------
+
+error RevertOnInit();
 
 contract LogicV1 is MockUUPSUpgrade(1) {
     uint256 public data = 0x1337;
@@ -33,8 +35,6 @@ contract LogicV1 is MockUUPSUpgrade(1) {
     }
 }
 
-error RevertOnInit();
-
 contract LogicV2 is MockUUPSUpgrade(2) {
     address public data = address(0x42);
 
@@ -49,6 +49,10 @@ contract LogicV2 is MockUUPSUpgrade(2) {
     function fn2() public pure returns (uint256) {
         return 3141;
     }
+
+    function initRevertsCustomMessage(string memory message) public pure {
+        require(false, message);
+    }
 }
 
 contract LogicNonexistentUUID {}
@@ -58,10 +62,12 @@ contract LogicInvalidUUID {
 }
 
 // -----------------------------------------------------
-// Tests
+// UUPSUpgrade Tests
 // -----------------------------------------------------
 
 contract TestUUPSUpgrade is Test {
+    event Upgraded(address indexed implementation);
+
     address bob = address(0xb0b);
     address alice = address(0xbabe);
     address tester = address(this);
@@ -70,7 +76,7 @@ contract TestUUPSUpgrade is Test {
     LogicV1 logicV1;
     LogicV2 logicV2;
 
-    function deployProxy(address implementation, bytes memory initCalldata) internal virtual returns (address) {
+    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal virtual returns (address) {
         return address(new ERC1967Proxy(address(implementation), initCalldata));
     }
 
@@ -78,7 +84,7 @@ contract TestUUPSUpgrade is Test {
         logicV1 = new LogicV1();
         logicV2 = new LogicV2();
 
-        proxy = deployProxy(address(logicV1), "");
+        proxy = deployProxyAndCall(address(logicV1), "");
     }
 
     /* ------------- setUp() ------------- */
@@ -99,98 +105,14 @@ contract TestUUPSUpgrade is Test {
 
         assertEq(LogicV1(proxy).callLogged(), false);
         assertEq(LogicV1(proxy).initializedCount(), 0);
-
-        // make sure that implementation is not
-        // located in sequential storage slot
-        MockUUPSUpgrade(proxy).scrambleStorage();
-        assertEq(MockUUPSUpgrade(proxy).implementation(), address(logicV1));
     }
 
-    /* ------------- deploy() ------------- */
-
-    event Upgraded(address indexed implementation);
-
-    /// expect Upgraded(address) to be emitted
-    function test_deploy_emit() public {
-        vm.expectEmit(true, false, false, false);
-
-        emit Upgraded(address(logicV1));
-
-        proxy = deployProxy(address(logicV1), "");
-    }
-
-    /// expect deploy to actually call the function
-    function test_deployAndCallInit() public {
-        proxy = deployProxy(address(logicV1), abi.encodePacked(LogicV1.init.selector));
-
-        assertEq(LogicV1(proxy).initializedCount(), 1);
-    }
-
-    // @note
-    // making all of these testFail for now, because
-    // forge requires revert to happen inside of contracts
-    // re-using these tests for all 4 proxy types
-    // (need to find a good method for libraries)
-
-    /// deploy and upgrade to an invalid address (EOA)
-    function testFail_deployAndCall_fail_NotAContract() public {
-        // vm.expectRevert(NotAContract.selector);
-
-        proxy = deployProxy(bob, "");
-    }
-
-    /// deploy and upgrade to contract with an invalid uuid
-    function testFail_deployAndCall_fail_InvalidUUID() public {
-        address logic = address(new LogicInvalidUUID());
-
-        // vm.expectRevert(InvalidUUID.selector);
-
-        proxy = deployProxy(address(logic), "");
-    }
-
-    /// deploy and upgrade to a contract that doesn't implement proxiableUUID
-    /// this one reverts differently depending on proxy..
-    function testFail_deployAndCall_fail_NonexistentUUID() public {
-        address logic = address(new LogicNonexistentUUID());
-
-        // vm.expectRevert(InvalidUUID.selector);
-
-        proxy = deployProxy(address(logic), "");
-    }
-
-    /// upgrade to v2 and call a reverting init function
-    function testFail_deployAndCall_fail_RevertOnInit() public {
-        // vm.expectRevert(RevertOnInit.selector);
-
-        proxy = deployProxy(address(logicV2), abi.encodePacked(LogicV2.initReverts.selector));
-    }
-
-    /* ------------- upgradeTo() ------------- */
-
-    /// expect Upgraded(address) to be emitted
-    function test_upgradeTo_emit() public {
-        // expect Upgraded(logicV2) to be emitted by proxy
-        vm.expectEmit(true, false, false, false, proxy);
-        emit Upgraded(address(logicV2));
-
-        LogicV1(proxy).upgradeTo(address(logicV2));
-
-        // expect Upgraded(logicV1) to be emitted by proxy
-        vm.expectEmit(true, false, false, false, proxy);
-        emit Upgraded(address(logicV1));
-
-        LogicV2(proxy).upgradeTo(address(logicV1));
-    }
-
-    /// expect implementation to be stored correctly
-    function test_upgradeTo_implementation() public {
-        LogicV1(proxy).upgradeTo(address(logicV2));
-
-        assertEq(LogicV1(proxy).implementation(), address(logicV2));
-    }
+    /* ------------- upgradeToAndCall() ------------- */
 
     /// expect implementation logic to change on upgrade
-    function test_upgradeTo_logic() public {
+    function test_upgradeToAndCall_logic() public {
+        assertEq(LogicV1(proxy).data(), 0);
+
         // proxy can call v1's setData
         LogicV1(proxy).setData(0x3333);
 
@@ -198,7 +120,7 @@ contract TestUUPSUpgrade is Test {
         assertEq(logicV1.data(), 0x1337); // implementation's data remains unchanged
 
         // -> upgrade to v2
-        LogicV1(proxy).upgradeTo(address(logicV2));
+        LogicV1(proxy).upgradeToAndCall(address(logicV2), "");
 
         // test v2 functions
         assertEq(LogicV2(proxy).fn(), 6969);
@@ -212,7 +134,7 @@ contract TestUUPSUpgrade is Test {
         LogicV1(proxy).setData(0x456);
 
         // <- upgrade back to v1
-        LogicV2(proxy).upgradeTo(address(logicV1));
+        LogicV2(proxy).upgradeToAndCall(address(logicV1), "");
 
         // v1's setData works again
         LogicV1(proxy).setData(0x6666);
@@ -224,37 +146,47 @@ contract TestUUPSUpgrade is Test {
         LogicV2(proxy).fn2();
     }
 
+    /// expect implementation to be stored correctly
+    function test_upgradeToAndCall_implementation() public {
+        LogicV1(proxy).upgradeToAndCall(address(logicV2), "");
+
+        assertEq(LogicV1(proxy).implementation(), address(logicV2));
+        assertEq(vm.load(proxy, ERC1967_PROXY_STORAGE_SLOT), bytes32(uint256(uint160(address(logicV2)))));
+    }
+
+    /// expect Upgraded(address) to be emitted
+    function test_upgradeToAndCall_emit() public {
+        vm.expectEmit(true, false, false, false, proxy);
+
+        emit Upgraded(address(logicV2));
+
+        LogicV1(proxy).upgradeToAndCall(address(logicV2), "");
+
+        vm.expectEmit(true, false, false, false, proxy);
+
+        emit Upgraded(address(logicV1));
+
+        LogicV2(proxy).upgradeToAndCall(address(logicV1), "");
+    }
+
     /// expect upgradeToAndCall to actually call the function
-    function test_upgradeToAndCallInit() public {
+    function test_upgradeToAndCall_init() public {
+        assertEq(LogicV1(proxy).initializedCount(), 0);
+
         LogicV1(proxy).upgradeToAndCall(address(logicV1), abi.encodePacked(LogicV1.init.selector));
 
         assertEq(LogicV1(proxy).initializedCount(), 1);
+
+        LogicV1(proxy).upgradeToAndCall(address(logicV1), abi.encodePacked(LogicV1.init.selector));
+
+        assertEq(LogicV1(proxy).initializedCount(), 2);
     }
 
-    /// upgrade to an invalid address (EOA)
-    function test_upgradeToAndCall_fail_NotAContract() public {
-        vm.expectRevert(NotAContract.selector);
+    /// upgrade and call a nonexistent init function
+    function test_upgradeToAndCall_fail_fallback() public {
+        vm.expectRevert();
 
-        LogicV1(proxy).upgradeToAndCall(bob, "");
-    }
-
-    /// upgrade to contract with an invalid uuid
-    function test_upgradeToAndCall_fail_InvalidUUID() public {
-        address logic = address(new LogicInvalidUUID());
-
-        vm.expectRevert(InvalidUUID.selector);
-
-        LogicV1(proxy).upgradeTo(logic);
-    }
-
-    /// upgrade to a contract that doesn't implement proxiableUUID
-    /// this one reverts differently depending on proxy..
-    function testFail_upgradeToAndCall_fail_NonexistentUUID() public {
-        address logic = address(new LogicNonexistentUUID());
-
-        // vm.expectRevert(InvalidUUID.selector);
-
-        LogicV1(proxy).upgradeTo(logic);
+        LogicV1(proxy).upgradeToAndCall(address(logicV2), "abcd");
     }
 
     /// upgrade to v2 and call a reverting init function
@@ -265,21 +197,56 @@ contract TestUUPSUpgrade is Test {
         LogicV1(proxy).upgradeToAndCall(address(logicV2), abi.encodePacked(LogicV2.initReverts.selector));
     }
 
-    /* ------------- gas ------------- */
+    /// call a reverting function during upgrade
+    /// make sure the error is returned
+    function testFuzz_upgradeToAndCall_fail_initRevertsCustomMessage(string memory message) public {
+        vm.expectRevert(bytes(message));
 
-    function testGas_deploy() public {
-        deployProxy(address(logicV1), "");
+        bytes memory initCalldata = abi.encodeWithSelector(LogicV2.initRevertsCustomMessage.selector, message);
+
+        LogicV1(proxy).upgradeToAndCall(address(logicV2), initCalldata);
     }
 
-    function testGas_upgradeTo() public {
-        LogicV1(proxy).upgradeTo(address(logicV2));
+    /// upgrade to an invalid address (EOA)
+    function testFuzz_upgradeToAndCall_fail_NotAContract(bytes memory initCalldata) public {
+        vm.expectRevert(NotAContract.selector);
+
+        LogicV1(proxy).upgradeToAndCall(bob, initCalldata);
     }
 
-    function testGas_upgradeToAndCall() public {
-        LogicV1(proxy).upgradeToAndCall(address(logicV2), abi.encodePacked(LogicV2.fn.selector));
+    /// upgrade to contract with an invalid uuid
+    function testFuzz_upgradeToAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
+        address logic = address(new LogicInvalidUUID());
+
+        vm.expectRevert(InvalidUUID.selector);
+
+        LogicV1(proxy).upgradeToAndCall(logic, initCalldata);
     }
 
-    function testGas_version() public view {
-        LogicV1(proxy).version();
+    /// upgrade to a contract that doesn't implement proxiableUUID
+    function testFuzz_upgradeToAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
+        address logic = address(new LogicNonexistentUUID());
+
+        vm.expectRevert();
+
+        LogicV1(proxy).upgradeToAndCall(logic, initCalldata);
     }
+
+    // /* ------------- gas ------------- */
+
+    // function testGas_deploy() public {
+    //     deployProxyAndCall(address(logicV1), "");
+    // }
+
+    // function testGas_upgradeTo() public {
+    //     LogicV1(proxy).upgradeToAndCall(address(logicV2), "");
+    // }
+
+    // function testGas_upgradeToAndCall() public {
+    //     LogicV1(proxy).upgradeToAndCall(address(logicV2), abi.encodePacked(LogicV2.fn.selector));
+    // }
+
+    // function testGas_version() public view {
+    //     LogicV1(proxy).version();
+    // }
 }

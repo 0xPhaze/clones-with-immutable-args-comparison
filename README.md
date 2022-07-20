@@ -65,7 +65,7 @@ Further todos:
 
 These contracts are a work in progress and should not be used in production. Use at your own risk.
 The test cases are meant to pin down proper specification.
-Though some cases are still lacking (for example reaching the limit on extra data).
+Though some can be extended (for example reaching the limit on extra data).
 
 Using proxies with fixed bytes32 args is relatively safe,
 as the code is simple (see [reference implementation](./src/reference/ERC1967ProxyWithImmutableArgs.sol)).

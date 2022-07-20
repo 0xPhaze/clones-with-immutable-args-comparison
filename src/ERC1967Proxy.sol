@@ -28,7 +28,11 @@ abstract contract ERC1967 {
 
             let success := call(gas(), logic, 0, 28, 4, 0, 32)
 
-            if iszero(and(success, eq(ERC1967_PROXY_STORAGE_SLOT, mload(0)))) {
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            if iszero(eq(ERC1967_PROXY_STORAGE_SLOT, mload(0))) {
                 mstore(0, 0x03ed501d) // InvalidUUID.selector
                 revert(28, 4)
             }

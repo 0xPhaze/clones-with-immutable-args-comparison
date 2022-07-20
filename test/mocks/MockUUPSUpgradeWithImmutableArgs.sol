@@ -60,8 +60,12 @@ contract MockUUPSUpgradeWithImmutableArgs is MockUUPSUpgrade {
         return LibERC1967ProxyWithImmutableArgs.getImmutableArgsLen();
     }
 
-    function getCalldata() public pure returns (bytes memory) {
-        return LibERC1967ProxyWithImmutableArgs.getCalldata();
+    function getFullCalldata() public pure returns (bytes memory) {
+        return LibERC1967ProxyWithImmutableArgs.getFullCalldata();
+    }
+
+    function getFullCalldataXtra(bytes memory) public pure returns (bytes memory) {
+        return LibERC1967ProxyWithImmutableArgs.getFullCalldata();
     }
 
     // functions to test calldata and extra calldata

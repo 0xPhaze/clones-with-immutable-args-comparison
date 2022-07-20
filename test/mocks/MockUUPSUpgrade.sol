@@ -18,6 +18,12 @@ contract MockUUPSUpgrade is UUPSUpgrade {
         }
     }
 
+    function forceUpgrade(address impl) public {
+        assembly {
+            sstore(ERC1967_PROXY_STORAGE_SLOT, impl)
+        }
+    }
+
     function scrambleStorage() public {
         utils.scrambleStorage(0, 100);
     }

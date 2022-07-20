@@ -9,11 +9,7 @@ import {ProxyTestDeployer} from "./utils/ProxyTestDeployer.sol";
 import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
 import {MockUUPSUpgradeWithImmutableArgs as Logic} from "./mocks/MockUUPSUpgradeWithImmutableArgs.sol";
 
-contract TestImmutableArgs is Test {
-    address bob = address(0xb0b);
-    address alice = address(0xbabe);
-    address tester = address(this);
-
+contract TestImmutableArgsFixed is Test {
     Logic logic;
 
     function setUp() public {
@@ -483,17 +479,6 @@ contract TestImmutableArgs is Test {
 
 import {TestUUPSUpgrade, LogicV1, LogicV2} from "./UUPSUpgrade.t.sol";
 
-contract TestUUPSUpgradeWithImmutableArgs is TestUUPSUpgrade {
-    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
-        return
-            LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(
-                implementation,
-                initCalldata,
-                abi.encode(keccak256("arg1"), keccak256("arg2"), keccak256("arg3"))
-            );
-    }
-}
-
 contract TestUUPSUpgradeWith3ImmutableArgs is TestUUPSUpgrade {
     function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
         return
@@ -532,24 +517,6 @@ contract TestUUPSUpgradeWith1ImmutableArgs is TestUUPSUpgrade {
 // ---------------------------------------------------------------------------------------
 
 import {TestERC1967} from "./ERC1967.t.sol";
-
-contract TestERC1967WithImmutableArgs is TestERC1967 {
-    ProxyTestDeployer deployer;
-
-    function setUp() public override {
-        super.setUp();
-        deployer = new ProxyTestDeployer();
-    }
-
-    function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
-        return
-            deployer.deployProxyWithImmutableArgs(
-                implementation,
-                initCalldata,
-                abi.encode(keccak256("arg1"), keccak256("arg2"), keccak256("arg3"))
-            );
-    }
-}
 
 contract TestERC1967With3ImmutableArgs is TestERC1967 {
     ProxyTestDeployer deployer;

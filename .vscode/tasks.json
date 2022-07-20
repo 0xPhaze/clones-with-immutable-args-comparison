@@ -4,7 +4,6 @@
 		{
             "type": "shell",
 			// "command": "forge test --debug Calldata --match-contract Immutable",
-			// "command": "forge test -vvv -m Calldata",
 			"command": "forge test -vvv",
 			"group": {
 				"kind": "test",

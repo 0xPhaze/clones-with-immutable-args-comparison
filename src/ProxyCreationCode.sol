@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./ERC1967Proxy.sol";
-import {utils} from "/utils/utils.sol";
+import {utils} from "./utils/utils.sol";
 
 error InvalidOffset(uint256 expected, uint256 actual);
 error ExceedsMaxArgSize(uint256 size);

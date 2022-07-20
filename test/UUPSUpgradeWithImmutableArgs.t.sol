@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
 import {utils} from "/utils/utils.sol";
 import {ProxyTestDeployer} from "./utils/ProxyTestDeployer.sol";

@@ -4,8 +4,6 @@ pragma solidity ^0.8.0;
 import "./ERC1967Proxy.sol";
 import {utils} from "/utils/utils.sol";
 
-import "forge-std/Test.sol";
-
 error InvalidOffset(uint256 expected, uint256 actual);
 error ExceedsMaxArgSize(uint256 size);
 
@@ -51,6 +49,7 @@ function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes
             /// if iszero(success) { revert(0, returndatasize()) }
 
             REVERT_ON_FAILURE(pc)                       //                  | imp                       | ...
+
             // RETURN_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
         );
     }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {verifyIsProxiableContract, proxyRuntimeCode, proxyCreationCode} from "/ProxyCreationCode.sol";
+import {verifyIsProxiableContract, proxyRuntimeCode, proxyCreationCode} from "/utils/proxyCreationCode.sol";
 import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
 
 /// @notice wrapper contract for lib

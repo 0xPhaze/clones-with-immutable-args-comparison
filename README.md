@@ -9,9 +9,9 @@ that contain "immutable args".
 src
 ├── ERC1967Proxy.sol - "ERC1967 proxy implementation"
 ├── LibERC1967ProxyWithImmutableArgs.sol - "Library for deploying ERC1967 proxy implementation with immutable args"
-├── ProxyCreationCode.sol - "Contains helper functions for proxy bytecode creation"
 ├── UUPSUpgrade.sol - "Minimal UUPS upgradeable contract"
 └── utils
+    ├── proxyCreationCode.sol - "Contains helper functions for proxy bytecode creation"
     └── utils.sol - "low-level utils"
 ```
 

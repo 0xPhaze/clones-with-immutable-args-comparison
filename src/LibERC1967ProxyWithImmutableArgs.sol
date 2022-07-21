@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {verifyIsProxiableContract, proxyRuntimeCode, proxyCreationCode} from "./ProxyCreationCode.sol";
+import {verifyIsProxiableContract, proxyRuntimeCode, proxyCreationCode} from "./utils/proxyCreationCode.sol";
 
 /// @title Library for deploying ERC1967 proxies with immutable args
 /// @author phaze (https://github.com/0xPhaze/proxies-with-immutable-args)

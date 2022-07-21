@@ -15,10 +15,10 @@ contract ProxyTestDeployer {
     ) public returns (address) {
         verifyIsProxiableContract(implementation);
 
-        bytes memory runtimecode = proxyRuntimeCode(immutableArgs);
-        bytes memory creationcode = proxyCreationCode(implementation, runtimecode, initCalldata);
+        bytes memory runtimeCode = proxyRuntimeCode(immutableArgs);
+        bytes memory creationCode = proxyCreationCode(implementation, runtimeCode, initCalldata);
 
-        return deployCodeBubbleUpRevertReason(creationcode);
+        return deployCodeBubbleUpRevertReason(creationCode);
     }
 
     /// @notice Should only be used for testing

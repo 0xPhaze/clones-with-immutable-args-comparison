@@ -22,11 +22,11 @@ library LibERC1967ProxyWithImmutableArgs {
     ) internal returns (address addr) {
         verifyIsProxiableContract(implementation);
 
-        bytes memory runtimecode = proxyRuntimeCode(immutableArgs);
-        bytes memory creationcode = proxyCreationCode(implementation, runtimecode, initCalldata);
+        bytes memory runtimeCode = proxyRuntimeCode(immutableArgs);
+        bytes memory creationCode = proxyCreationCode(implementation, runtimeCode, initCalldata);
 
         assembly {
-            addr := create(0, add(creationcode, 0x20), mload(creationcode))
+            addr := create(0, add(creationCode, 0x20), mload(creationCode))
         }
 
         if (addr.code.length == 0) revert();

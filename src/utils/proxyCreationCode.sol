@@ -8,7 +8,7 @@ error InvalidOffset(uint256 expected, uint256 actual);
 error ExceedsMaxArgSize(uint256 size);
 
 /// @notice Verifies that implementation contract conforms to ERC1967
-/// @notice This can be part of creationcode, but doesn't have to be
+/// @notice This can be part of creationCode, but doesn't have to be
 /// @param implementation address containing the implementation logic
 function verifyIsProxiableContract(address implementation) view {
     if (implementation.code.length == 0) revert NotAContract();
@@ -24,50 +24,46 @@ function verifyIsProxiableContract(address implementation) view {
 function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes memory code) {
     uint256 initCalldataSize = initCalldata.length;
 
-    if (initCalldataSize != 0) {
+    code = abi.encodePacked(
+        // push initCalldata to stack in 32 bytes chunks and store in memory at pos 0 
 
-        code = abi.encodePacked(
-            // push initCalldata to stack in 32 bytes chunks and store in memory at pos 0 
+        MSTORE(0, initCalldata),                    // MSTORE icd       |                           | [0, ics) = initcalldata
 
-            MSTORE(0, initCalldata),                    // MSTORE icd       |                           | [0, ics) = initcalldata
+        /// let success := delegatecall(gas(), implementation, 0, initCalldataSize, 0, 0)
 
-            /// let success := delegatecall(gas(), implementation, 0, initCalldataSize, 0, 0)
+        hex"3d"                                     // RETURNDATASIZE   | 00  imp                   | [0, ics) = initcalldata
+        hex"3d",                                    // RETURNDATASIZE   | 00  00  imp               | [0, ics) = initcalldata
+        PUSHX(initCalldataSize),                    // PUSHX ics        | ics 00  00  imp           | [0, ics) = initcalldata
+        hex"3d"                                     // RETURNDATASIZE   | 00  ics 00  00  imp       | [0, ics) = initcalldata
+        hex"84"                                     // DUP5             | imp 00  ics 00  00  imp   | [0, ics) = initcalldata
+        hex"5a"                                     // GAS              | gas imp 00  ics 00  00  ..| [0, ics) = initcalldata
+        hex"f4"                                     // DELEGATECALL     | scs imp                   | ...
+    );
 
-            hex"3d"                                     // RETURNDATASIZE   | 00  imp                   | [0, ics) = initcalldata
-            hex"3d",                                    // RETURNDATASIZE   | 00  00  imp               | [0, ics) = initcalldata
-            PUSHX(initCalldataSize),                    // PUSHX ics        | ics 00  00  imp           | [0, ics) = initcalldata
-            hex"3d"                                     // RETURNDATASIZE   | 00  ics 00  00  imp       | [0, ics) = initcalldata
-            hex"84"                                     // DUP5             | imp 00  ics 00  00  imp   | [0, ics) = initcalldata
-            hex"5a"                                     // GAS              | gas imp 00  ics 00  00  ..| [0, ics) = initcalldata
-            hex"f4"                                     // DELEGATECALL     | scs imp                   | ...
-        );
+    // advance program counter
+    pc += code.length;
 
-        // advance program counter
-        pc += code.length;
+    code = abi.encodePacked(code,
+        /// if iszero(success) { revert(0, returndatasize()) }
 
-        code = abi.encodePacked(code,
-            /// if iszero(success) { revert(0, returndatasize()) }
+        REVERT_ON_FAILURE(pc)                       //                  | imp                       | ...
 
-            REVERT_ON_FAILURE(pc)                       //                  | imp                       | ...
-
-            // RETURN_REVERT_REASON_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
-        );
-    }
+        // RETURN_REVERT_REASON_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
+    );
 }
 
 /// @notice Returns the creation code for an ERC1967 proxy with immutable args (max. 2^16 - 1 bytes)
 /// @param implementation address containing the implementation logic
-/// @param runtimecode evm bytecode (runtime + concatenated extra data)
-/// @return creationcode evm bytecode that deploys ERC1967 proxy runtimecode
+/// @param runtimeCode evm bytecode (runtime + concatenated extra data)
+/// @return creationCode evm bytecode that deploys ERC1967 proxy runtimeCode
 function proxyCreationCode(
     address implementation,
-    bytes memory runtimecode,
+    bytes memory runtimeCode,
     bytes memory initCalldata
-) pure returns (bytes memory creationcode) {
-    // program counter
-    uint256 pc = 0;
+) pure returns (bytes memory creationCode) {
+    uint256 pc; // program counter
 
-    creationcode = abi.encodePacked(
+    creationCode = abi.encodePacked(
         /// log2(0, 0, UPGRADED_EVENT_SIG, logic)
 
         hex"73", implementation,                    // PUSH20 imp       | imp
@@ -78,29 +74,29 @@ function proxyCreationCode(
         hex"a2"                                     // LOG2             | imp
     );
 
-    pc = creationcode.length;
+    pc = creationCode.length;
 
     // optional: insert code to call implementation contract with initCalldata during contract creation
     if (initCalldata.length != 0) {
-        bytes memory callcode = initCallcode(pc, initCalldata);
+        creationCode = abi.encodePacked(
+            creationCode, 
+            initCallcode(pc, initCalldata)
+            );
 
-        creationcode = abi.encodePacked(creationcode, callcode);
-
-        pc = creationcode.length;
+        // update program counter
+        pc = creationCode.length;
     }
 
+    // PUSH1 is being used for storing runtimeSize
+    if (runtimeCode.length > type(uint16).max) revert ExceedsMaxArgSize(runtimeCode.length);
 
-    // runtimeOffset: offset from which to copy the runtime code = pc + size of next block
+    uint16 rts = uint16(runtimeCode.length);
+
+    // runtimeOffset: runtime code location 
+    //                = current pc + size of next block
     uint16 rto = uint16(pc + 45);
 
-    uint256 runtimeSize = runtimecode.length; // runtime code is concatenated with args
-
-    // hardcoded PUSH1 for now
-    if (runtimeSize > type(uint16).max) revert ExceedsMaxArgSize(runtimeSize);
-
-    uint16 rts = uint16(runtimeSize);
-
-    creationcode = abi.encodePacked( creationcode,
+    creationCode = abi.encodePacked( creationCode,
         /// sstore(ERC1967_PROXY_STORAGE_SLOT, implementation)
 
         hex"7f", ERC1967_PROXY_STORAGE_SLOT,        // PUSH32 pss       | pss imp
@@ -110,9 +106,9 @@ function proxyCreationCode(
 
         hex"61", rts,                               // PUSH2 rts        | rts
         hex"80"                                     // DUP1             | rts rts
-        hex"61", rto,                               // PUSH1 rto        | rto rts rts
+        hex"61", rto,                               // PUSH2 rto        | rto rts rts
         hex"3d"                                     // RETURNDATASIZE   | 00  rto rts rts
-        hex"39"                                     // CODECOPY         | rts                       | [00, rts) = runtimecode + args
+        hex"39"                                     // CODECOPY         | rts                       | [00, rts) = runtimeCode + args
 
         /// return(0, rts)
 
@@ -120,21 +116,18 @@ function proxyCreationCode(
         hex"f3"                                     // RETURN
     ); // prettier-ignore
 
-    pc = creationcode.length;
+    pc = creationCode.length;
 
-    // validation for runtime location parameter
-    if (pc != rto) revert InvalidOffset(rto, creationcode.length);
+    // sanity check for runtime location parameter
+    if (pc != rto) revert InvalidOffset(rto, creationCode.length);
 
-    creationcode = abi.encodePacked(
-        creationcode,
-        runtimecode
-    ); // prettier-ignore
+    creationCode = abi.encodePacked(creationCode, runtimeCode);
 }
 
 /// @notice Returns the runtime code for an ERC1967 proxy with immutable args (max. 2^16 - 1 bytes)
 /// @param args immutable args byte array
-/// @return runtimecode evm bytecode
-function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimecode) {
+/// @return runtimeCode evm bytecode
+function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeCode) {
     uint16 extraDataSize = uint16(args.length) + 2; // 2 extra bytes for the storing the size of the args
 
     uint8 argsCodeOffset = 0x48; // length of the runtime code
@@ -142,7 +135,7 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimec
     uint8 returnJumpLocation = argsCodeOffset - 5;
 
     // @note: uses codecopy, room to optimize by directly encoding immutableArgs into bytecode
-    runtimecode = abi.encodePacked(
+    runtimeCode = abi.encodePacked(
         /// calldatacopy(0, 0, calldatasize())
 
         hex"36"                                     // CALLDATASIZE     | cds                       |
@@ -205,8 +198,8 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimec
 
     ); // prettier-ignore
 
-    // sanity check for for jump locations
-    if (runtimecode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset, runtimecode.length);
+    // just a sanity check for for jump locations
+    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset, runtimeCode.length);
 }
 
 // ---------------------------------------------------------------------
@@ -287,7 +280,7 @@ function RETURN_REVERT_REASON_ON_FAILURE_TEST(uint256 pc) pure returns (bytes me
 }
 
 
-/// @notice Crude mstore that copies bytes to memory offset in chunks of 32
+/// @notice Mstore that copies bytes to memory offset in chunks of 32
 function MSTORE(uint256 offset, bytes memory data) pure returns (bytes memory code) {
 
     bytes32[] memory bytes32Data = utils.splitToBytes32(data);
@@ -308,6 +301,8 @@ function PUSHX(uint256 value) pure returns (bytes memory code) {
     return PUSHX(value, utils.getRequiredBytes(value));
 }
 
+/// @notice Pushes value with the least required bytes onto stack
+/// @notice Probably overkill...
 function PUSHX(uint256 value, uint256 numBytes) pure returns (bytes memory code) {
     if (numBytes == 1) code = abi.encodePacked(hex"60", uint8(value));
     else if (numBytes == 2) code = abi.encodePacked(hex"61", uint16(value));

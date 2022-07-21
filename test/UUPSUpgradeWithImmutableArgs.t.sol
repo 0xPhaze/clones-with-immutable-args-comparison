@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
-import {utils} from "./utils/utils.sol";
 import {ProxyTestDeployer} from "./utils/ProxyTestDeployer.sol";
 
 import {LibERC1967ProxyWithImmutableArgs} from "/LibERC1967ProxyWithImmutableArgs.sol";
 import {MockUUPSUpgrade} from "./mocks/MockUUPSUpgrade.sol";
+
+// ---------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------
 
 contract MockBase {
     uint256 immutable argOffset;
@@ -19,11 +22,31 @@ contract MockBase {
     }
 }
 
-contract MockReturnMsgData {
+contract MockGetMsgData {
     fallback() external payable {
         assembly {
             calldatacopy(0, 0, calldatasize())
             return(0, calldatasize())
+        }
+    }
+}
+
+contract MockGetImmutableArgsLen {
+    fallback() external payable {
+        uint256 size = LibERC1967ProxyWithImmutableArgs.getImmutableArgsLen();
+        assembly {
+            mstore(0, size)
+            return(0, 0x20)
+        }
+    }
+}
+
+contract MockGetImmutableArgsOffset {
+    fallback() external payable {
+        uint256 offset = LibERC1967ProxyWithImmutableArgs.getImmutableArgsOffset();
+        assembly {
+            mstore(0, offset)
+            return(0, 0x20)
         }
     }
 }
@@ -118,6 +141,10 @@ contract MockGetArgUint8 is MockBase {
     }
 }
 
+// ---------------------------------------------------------------------
+// Immutable Args Tests
+// ---------------------------------------------------------------------
+
 contract TestImmutableArgs is Test {
     address logic;
 
@@ -125,9 +152,7 @@ contract TestImmutableArgs is Test {
         logic = address(new MockUUPSUpgrade(1));
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------------------
+    /* ------------- helpers ------------- */
 
     function boundParameterRange(
         uint256 immutableArgsLen,
@@ -161,18 +186,40 @@ contract TestImmutableArgs is Test {
         assertEq(returnedArg, expectedArg);
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Tests
-    // ---------------------------------------------------------------------------------------
+    /* ------------- tests ------------- */
 
-    function test_immutableArgs(bytes memory randomCalldata, bytes memory immutableArgs) public {
+    function test_getMsgData(bytes memory randomCalldata, bytes memory immutableArgs) public {
         address proxy = LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(logic, "", immutableArgs);
 
-        MockUUPSUpgrade(proxy).forceUpgrade(address(new MockReturnMsgData()));
+        MockUUPSUpgrade(proxy).forceUpgrade(address(new MockGetMsgData()));
 
         (, bytes memory returndata) = address(proxy).call(randomCalldata);
 
         assertEq(returndata, abi.encodePacked(randomCalldata, immutableArgs, uint16(immutableArgs.length)));
+    }
+
+    function test_getArgsLen(bytes memory randomCalldata, bytes memory immutableArgs) public {
+        address proxy = LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(logic, "", immutableArgs);
+
+        MockUUPSUpgrade(proxy).forceUpgrade(address(new MockGetImmutableArgsLen()));
+
+        (, bytes memory returndata) = address(proxy).call(randomCalldata);
+
+        uint256 len = abi.decode(returndata, (uint256));
+
+        assertEq(len, immutableArgs.length);
+    }
+
+    function test_getArgsOffset(bytes memory randomCalldata, bytes memory immutableArgs) public {
+        address proxy = LibERC1967ProxyWithImmutableArgs.deployProxyWithImmutableArgs(logic, "", immutableArgs);
+
+        MockUUPSUpgrade(proxy).forceUpgrade(address(new MockGetImmutableArgsOffset()));
+
+        (, bytes memory returndata) = address(proxy).call(randomCalldata);
+
+        uint256 offset = abi.decode(returndata, (uint256));
+
+        assertEq(offset, randomCalldata.length);
     }
 
     function test_getArgBytes(
@@ -289,9 +336,9 @@ contract TestImmutableArgs is Test {
     }
 }
 
-// ---------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // re-run all tests from "./UUPSUpgrade.t.sol" for proxy with immutable args
-// ---------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 
 import {TestUUPSUpgrade, LogicV1, LogicV2} from "./UUPSUpgrade.t.sol";
 
@@ -306,11 +353,11 @@ contract TestUUPSUpgradeWithImmutableArgs is TestUUPSUpgrade {
     }
 }
 
-// // ---------------------------------------------------------------------------------------
-// // re-run all tests from "./ERC1967.t.sol" for proxy with immutable args
-// // - these tests need to be run from a `Deployer` contract,
-// //   so that forge can catch the reverts on external calls
-// // ---------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// re-run all tests from "./ERC1967.t.sol" for proxy with immutable args
+// - these tests need to be run from a `Deployer` contract,
+//   so that forge can catch the reverts on external calls
+// ---------------------------------------------------------------------
 
 import {TestERC1967} from "./ERC1967.t.sol";
 

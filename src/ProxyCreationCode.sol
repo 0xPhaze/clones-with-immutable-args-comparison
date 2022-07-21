@@ -50,24 +50,24 @@ function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes
 
             REVERT_ON_FAILURE(pc)                       //                  | imp                       | ...
 
-            // RETURN_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
+            // RETURN_REVERT_REASON_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
         );
     }
 }
 
 /// @notice Returns the creation code for an ERC1967 proxy with immutable args (max. 2^16 - 1 bytes)
 /// @param implementation address containing the implementation logic
-/// @param runtimeCode evm bytecode (runtime + concatenated extra data)
-/// @return creationCode evm bytecode that deploys ERC1967 proxy runtimeCode
+/// @param runtimecode evm bytecode (runtime + concatenated extra data)
+/// @return creationcode evm bytecode that deploys ERC1967 proxy runtimecode
 function proxyCreationCode(
     address implementation,
-    bytes memory runtimeCode,
+    bytes memory runtimecode,
     bytes memory initCalldata
-) pure returns (bytes memory creationCode) {
+) pure returns (bytes memory creationcode) {
     // program counter
     uint256 pc = 0;
 
-    creationCode = abi.encodePacked(
+    creationcode = abi.encodePacked(
         /// log2(0, 0, UPGRADED_EVENT_SIG, logic)
 
         hex"73", implementation,                    // PUSH20 imp       | imp
@@ -78,29 +78,29 @@ function proxyCreationCode(
         hex"a2"                                     // LOG2             | imp
     );
 
-    pc = creationCode.length;
+    pc = creationcode.length;
 
     // optional: insert code to call implementation contract with initCalldata during contract creation
     if (initCalldata.length != 0) {
         bytes memory callcode = initCallcode(pc, initCalldata);
 
-        creationCode = abi.encodePacked(creationCode, callcode);
+        creationcode = abi.encodePacked(creationcode, callcode);
 
-        pc = creationCode.length;
+        pc = creationcode.length;
     }
 
 
     // runtimeOffset: offset from which to copy the runtime code = pc + size of next block
     uint16 rto = uint16(pc + 45);
 
-    uint256 runtimeSize = runtimeCode.length; // runtime code is concatenated with args
+    uint256 runtimeSize = runtimecode.length; // runtime code is concatenated with args
 
     // hardcoded PUSH1 for now
     if (runtimeSize > type(uint16).max) revert ExceedsMaxArgSize(runtimeSize);
 
     uint16 rts = uint16(runtimeSize);
 
-    creationCode = abi.encodePacked( creationCode,
+    creationcode = abi.encodePacked( creationcode,
         /// sstore(ERC1967_PROXY_STORAGE_SLOT, implementation)
 
         hex"7f", ERC1967_PROXY_STORAGE_SLOT,        // PUSH32 pss       | pss imp
@@ -112,7 +112,7 @@ function proxyCreationCode(
         hex"80"                                     // DUP1             | rts rts
         hex"61", rto,                               // PUSH1 rto        | rto rts rts
         hex"3d"                                     // RETURNDATASIZE   | 00  rto rts rts
-        hex"39"                                     // CODECOPY         | rts                       | [00, rts) = runtimeCode + args
+        hex"39"                                     // CODECOPY         | rts                       | [00, rts) = runtimecode + args
 
         /// return(0, rts)
 
@@ -120,21 +120,21 @@ function proxyCreationCode(
         hex"f3"                                     // RETURN
     ); // prettier-ignore
 
-    pc = creationCode.length;
+    pc = creationcode.length;
 
     // validation for runtime location parameter
-    if (pc != rto) revert InvalidOffset(rto, creationCode.length);
+    if (pc != rto) revert InvalidOffset(rto, creationcode.length);
 
-    creationCode = abi.encodePacked(
-        creationCode,
-        runtimeCode
+    creationcode = abi.encodePacked(
+        creationcode,
+        runtimecode
     ); // prettier-ignore
 }
 
 /// @notice Returns the runtime code for an ERC1967 proxy with immutable args (max. 2^16 - 1 bytes)
 /// @param args immutable args byte array
-/// @return runtimeCode evm bytecode
-function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeCode) {
+/// @return runtimecode evm bytecode
+function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimecode) {
     uint16 extraDataSize = uint16(args.length) + 2; // 2 extra bytes for the storing the size of the args
 
     uint8 argsCodeOffset = 0x48; // length of the runtime code
@@ -142,7 +142,7 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
     uint8 returnJumpLocation = argsCodeOffset - 5;
 
     // @note: uses codecopy, room to optimize by directly encoding immutableArgs into bytecode
-    runtimeCode = abi.encodePacked(
+    runtimecode = abi.encodePacked(
         /// calldatacopy(0, 0, calldatasize())
 
         hex"36"                                     // CALLDATASIZE     | cds                       |
@@ -206,12 +206,12 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
     ); // prettier-ignore
 
     // sanity check for for jump locations
-    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset, runtimeCode.length);
+    if (runtimecode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset, runtimecode.length);
 }
 
-// ---------------------------------------------
+// ---------------------------------------------------------------------
 // Snippets
-// ---------------------------------------------
+// ---------------------------------------------------------------------
 
 /// @notice expects call `success` (scs) bool to be on top of stack
 function REVERT_ON_FAILURE(uint256 pc) pure returns (bytes memory code) {
@@ -247,7 +247,7 @@ function REVERT_ON_FAILURE(uint256 pc) pure returns (bytes memory code) {
 // apparently you can't revert any returndata 
 // messages when using CREATE (returndatasize() is always 0)
 // that's why I'm encoding it in the returndata
-function RETURN_ON_FAILURE_TEST(uint256 pc) pure returns (bytes memory code) {
+function RETURN_REVERT_REASON_ON_FAILURE_TEST(uint256 pc) pure returns (bytes memory code) {
     // upper bound for when end location requires 32 bytes
     uint256 pushNumBytes = utils.getRequiredBytes(pc + 38);
     // uint256 end = pc + pushNumBytes + 51;

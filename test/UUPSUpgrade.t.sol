@@ -7,9 +7,9 @@ import {MockUUPSUpgrade} from "./mocks/MockUUPSUpgrade.sol";
 
 import "/ERC1967Proxy.sol";
 
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 // Mock Logic
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 
 error RevertOnInit();
 
@@ -61,9 +61,9 @@ contract LogicInvalidUUID {
     bytes32 public proxiableUUID = 0x0000000000000000000000000000000000000000000000000000000000001234;
 }
 
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 // UUPSUpgrade Tests
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 
 contract TestUUPSUpgrade is Test {
     event Upgraded(address indexed implementation);
@@ -149,6 +149,8 @@ contract TestUUPSUpgrade is Test {
     /// expect implementation to be stored correctly
     function test_upgradeToAndCall_implementation() public {
         LogicV1(proxy).upgradeToAndCall(address(logicV2), "");
+
+        MockUUPSUpgrade(proxy).scrambleStorage(0, 100);
 
         assertEq(LogicV1(proxy).implementation(), address(logicV2));
         assertEq(vm.load(proxy, ERC1967_PROXY_STORAGE_SLOT), bytes32(uint256(uint160(address(logicV2)))));

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 library utils {
+    /// @notice split data to chunks of 32 bytes
     function splitToBytes32(bytes memory data) internal pure returns (bytes32[] memory split) {
         uint256 numEl = (data.length + 31) >> 5;
 
@@ -16,6 +17,7 @@ library utils {
         mstore(loc, data);
     }
 
+    /// @notice stores data at offset while preserving existing memory
     function mstore(uint256 offset, bytes memory data) internal pure {
         uint256 slot;
 
@@ -40,6 +42,7 @@ library utils {
         }
     }
 
+    /// @notice gets minimum required bytes to store value
     function getRequiredBytes(uint256 value) internal pure returns (uint256) {
         uint256 numBytes = 1;
 

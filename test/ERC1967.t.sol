@@ -7,9 +7,9 @@ import {MockUUPSUpgrade} from "./mocks/MockUUPSUpgrade.sol";
 
 import "/ERC1967Proxy.sol";
 
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 // Mock Logic
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 
 error RevertOnInit();
 
@@ -35,9 +35,9 @@ contract LogicInvalidUUID {
     bytes32 public proxiableUUID = 0x0000000000000000000000000000000000000000000000000000000000001234;
 }
 
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 // ERC1967 Tests
-// -----------------------------------------------------
+// ---------------------------------------------------------------------
 
 contract TestERC1967 is Test {
     event Upgraded(address indexed implementation);
@@ -66,7 +66,7 @@ contract TestERC1967 is Test {
 
         // make sure that implementation is not
         // located in sequential storage slot
-        MockUUPSUpgrade(proxy).scrambleStorage();
+        MockUUPSUpgrade(proxy).scrambleStorage(0, 100);
 
         assertEq(MockUUPSUpgrade(proxy).implementation(), address(logic));
         assertEq(vm.load(proxy, ERC1967_PROXY_STORAGE_SLOT), bytes32(uint256(uint160(address(logic)))));
@@ -95,6 +95,32 @@ contract TestERC1967 is Test {
         proxy = deployProxyAndCall(address(logic), abi.encodePacked("abcd"));
     }
 
+    /// deploy and upgrade to an invalid address (EOA)
+    function testFuzz_deployProxyAndCall_fail_NotAContract(bytes memory initCalldata) public {
+        vm.expectRevert(NotAContract.selector);
+
+        proxy = deployProxyAndCall(bob, initCalldata);
+    }
+
+    /// deploy and upgrade to contract with an invalid uuid
+    function testFuzz_deployProxyAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
+        address logic2 = address(new LogicInvalidUUID());
+
+        vm.expectRevert(InvalidUUID.selector);
+
+        proxy = deployProxyAndCall(address(logic2), initCalldata);
+    }
+
+    /// deploy and upgrade to a contract that doesn't implement proxiableUUID
+    /// this one reverts differently depending on proxy..
+    function testFuzz_deployProxyAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
+        address logic2 = address(new LogicNonexistentUUID());
+
+        vm.expectRevert();
+
+        proxy = deployProxyAndCall(address(logic2), initCalldata);
+    }
+
     /// note: making all of these testFail, because
     /// retrieving a custom error during contract deployment
     /// is too messy, since it doesn't work by default
@@ -119,31 +145,5 @@ contract TestERC1967 is Test {
         bytes memory initCalldata = abi.encodeWithSelector(Logic.initRevertsCustomMessage.selector, message);
 
         proxy = deployProxyAndCall(address(logic), initCalldata);
-    }
-
-    /// deploy and upgrade to an invalid address (EOA)
-    function testFailFuzz_deployProxyAndCall_fail_NotAContract(bytes memory initCalldata) public {
-        // vm.expectRevert(NotAContract.selector);
-
-        proxy = deployProxyAndCall(bob, initCalldata);
-    }
-
-    /// deploy and upgrade to contract with an invalid uuid
-    function testFailFuzz_deployProxyAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
-        address logic2 = address(new LogicInvalidUUID());
-
-        // vm.expectRevert(InvalidUUID.selector);
-
-        proxy = deployProxyAndCall(address(logic2), initCalldata);
-    }
-
-    /// deploy and upgrade to a contract that doesn't implement proxiableUUID
-    /// this one reverts differently depending on proxy..
-    function testFailFuzz_deployProxyAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
-        address logic2 = address(new LogicNonexistentUUID());
-
-        // vm.expectRevert();
-
-        proxy = deployProxyAndCall(address(logic2), initCalldata);
     }
 }

@@ -11,8 +11,6 @@ src
 ├── LibERC1967ProxyWithImmutableArgs.sol - "Library for deploying ERC1967 proxy implementation with immutable args"
 ├── ProxyCreationCode.sol - "Contains helper functions for proxy bytecode creation"
 ├── UUPSUpgrade.sol - "Minimal UUPS upgradeable contract"
-├── reference
-│   └── ERC1967ProxyWithImmutableArgs.sol - "Reference implementation for proxies with fixed immutable arg lengths"
 └── utils
     └── utils.sol - "low-level utils"
 ```
@@ -147,14 +145,7 @@ Further todos:
 These contracts are a work in progress and should not be used in production. Use at your own risk.
 The test cases are meant to pin down proper specification.
 Deploying very large immutable args has not been extensively tested 
-(though the fuzzer didn't complain so far).
-
-Using proxies with fixed bytes32 args is relatively safe,
-as the code is directly obtained from compiled solidity code (see [reference implementation](./src/reference/ERC1967ProxyWithImmutableArgs.sol)).
-
-There be dragons, however, for the proxy deployed by [hand-crafted bytecode](./src/ProxyCreationCode.sol).
-Do not trust this for any arg lengths until further testing has been done.
-
+(though the fuzzer didn't complain so far) and might increase gas costs to every when interacting with the proxy in general.
 
 ## Acknowledgements
 - [ClonesWithImmutableArgs](https://github.com/wighawag/clones-with-immutable-args)

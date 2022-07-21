@@ -15,42 +15,15 @@ contract ProxyTestDeployer {
     ) public returns (address) {
         verifyIsProxiableContract(implementation);
 
-        bytes memory runtimeCode = proxyRuntimeCode(immutableArgs);
-        bytes memory creationCode = proxyCreationCode(implementation, runtimeCode, initCalldata);
+        bytes memory runtimecode = proxyRuntimeCode(immutableArgs);
+        bytes memory creationcode = proxyCreationCode(implementation, runtimecode, initCalldata);
 
-        return deployCode(creationCode);
-    }
-
-    function deployProxyVerifiable(
-        address implementation,
-        bytes memory initCalldata,
-        bytes32 arg1
-    ) public returns (address addr) {
-        return LibERC1967ProxyWithImmutableArgs.deployProxyVerifiable(implementation, initCalldata, arg1);
-    }
-
-    function deployProxyVerifiable(
-        address implementation,
-        bytes memory initCalldata,
-        bytes32 arg1,
-        bytes32 arg2
-    ) public returns (address addr) {
-        return LibERC1967ProxyWithImmutableArgs.deployProxyVerifiable(implementation, initCalldata, arg1, arg2);
-    }
-
-    function deployProxyVerifiable(
-        address implementation,
-        bytes memory initCalldata,
-        bytes32 arg1,
-        bytes32 arg2,
-        bytes32 arg3
-    ) public returns (address addr) {
-        return LibERC1967ProxyWithImmutableArgs.deployProxyVerifiable(implementation, initCalldata, arg1, arg2, arg3);
+        return deployCodeBubbleUpRevertReason(creationcode);
     }
 
     /// @notice Should only be used for testing
     /// @notice Reads encoded revert reason in deployed bytecode
-    function deployCode(bytes memory bytecode) internal returns (address payable addr) {
+    function deployCodeBubbleUpRevertReason(bytes memory bytecode) internal returns (address payable addr) {
         assembly {
             addr := create(0, add(bytecode, 0x20), mload(bytecode))
 

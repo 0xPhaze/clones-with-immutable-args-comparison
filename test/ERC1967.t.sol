@@ -139,7 +139,7 @@ contract TestERC1967 is Test {
 
     /// call a reverting function during deployment
     /// make sure the error is returned
-    function testFailFuzz_deployProxyAndCall_fail_initRevertsCustomMessage(bytes memory message) public {
+    function testFail_deployProxyAndCall_fail_initRevertsCustomMessage(bytes memory message) public {
         // vm.expectRevert(message);
 
         bytes memory initCalldata = abi.encodeWithSelector(Logic.initRevertsCustomMessage.selector, message);

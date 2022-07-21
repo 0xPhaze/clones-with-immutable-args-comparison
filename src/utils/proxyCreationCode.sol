@@ -243,7 +243,8 @@ function REVERT_ON_FAILURE(uint256 pc) pure returns (bytes memory code) {
 function RETURN_REVERT_REASON_ON_FAILURE_TEST(uint256 pc) pure returns (bytes memory code) {
     // upper bound for when end location requires 32 bytes
     uint256 pushNumBytes = utils.getRequiredBytes(pc + 38);
-    // uint256 end = pc + pushNumBytes + 51;
+
+    // jump location to continue in code
     uint256 end = pc + pushNumBytes + 19;
 
     code = abi.encodePacked(
@@ -254,29 +255,32 @@ function RETURN_REVERT_REASON_ON_FAILURE_TEST(uint256 pc) pure returns (bytes me
 
         /// mstore(0, 0)
 
-        hex"60" hex"00"
-        hex"80" 
-        hex"52"
+        hex"60" hex"00"                             // PUSH1 00         | 00
+        hex"80"                                     // DUP1 80          | 80  00
+        hex"52"                                     // MSTORE           |                           | [0] = 00 (STOP opcode; identifier for encoding reverted call reason)
 
 
         /// returndatacopy(1, 0, returndatasize())
 
-        hex"3d"                                     // RETURNDATASIZE   | rds                       | ...
-        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | ...
-        hex"60" hex"01"                             // PUSH1 01         | 01  00  rds               | ...
-        hex"3e"                                     // RETURNDATACOPY   |                           | [0] = wtf (identifier for reverting call)
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0] = 00
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0] = 00
+        hex"60" hex"01"                             // PUSH1 01         | 01  00  rds               | [0] = 00
+        hex"3e"                                     // RETURNDATACOPY   |                           | [0] = 00
 
 
         /// return(0, 1 + returndatasize())
 
-        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds + 20) = encoded returndata
-        hex"60" hex"01"                             // PUSH1 01         | 01  rds                   | [0, rds + 20) = encoded returndata
-        hex"01"                                     // ADD              | eds                       | [0, rds + 20) = encoded returndata
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds + 20) = encoded revert reason
+        hex"60" hex"01"                             // PUSH1 01         | 01  rds                   | [0, rds + 20) = encoded revert reason
+        hex"01"                                     // ADD              | eds                       | [0, rds + 20) = encoded revert reason
         hex"60" hex"00"                             // PUSH1 00         | 00  eds
         hex"f3"                                     // RETURN           |        
 
         hex"5b"                                     // JUMPDEST         | 
     );
+
+    // sanity check
+    if (end + 1 !=  pc + code.length) revert InvalidOffset(end + 1, pc + code.length);
 }
 
 
@@ -288,11 +292,13 @@ function MSTORE(uint256 offset, bytes memory data) pure returns (bytes memory co
     uint256 numChunks = bytes32Data.length;
 
     for (uint256 i; i < numChunks; i++) {
-        code = abi.encodePacked(
-            code,
-            hex"7f", bytes32Data[i],
-            PUSHX(offset + i * 32),
-            hex"52"
+        code = abi.encodePacked( code,
+            /// mstore(offset + i * 32, bytes32Data[i])
+
+            hex"7f", bytes32Data[i],                // PUSH32 data      | data
+            PUSHX(offset + i * 32),                 // PUSHX off        | off data
+            hex"52"                                 // MSTORE           |
+
         ); // prettier-ignore
     }
 }

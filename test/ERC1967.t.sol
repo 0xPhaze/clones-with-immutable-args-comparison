@@ -96,14 +96,14 @@ contract TestERC1967 is Test {
     }
 
     /// deploy and upgrade to an invalid address (EOA)
-    function testFuzz_deployProxyAndCall_fail_NotAContract(bytes memory initCalldata) public {
+    function test_deployProxyAndCall_fail_NotAContract(bytes memory initCalldata) public {
         vm.expectRevert(NotAContract.selector);
 
         proxy = deployProxyAndCall(bob, initCalldata);
     }
 
     /// deploy and upgrade to contract with an invalid uuid
-    function testFuzz_deployProxyAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
+    function test_deployProxyAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
         address logic2 = address(new LogicInvalidUUID());
 
         vm.expectRevert(InvalidUUID.selector);
@@ -113,7 +113,7 @@ contract TestERC1967 is Test {
 
     /// deploy and upgrade to a contract that doesn't implement proxiableUUID
     /// this one reverts differently depending on proxy..
-    function testFuzz_deployProxyAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
+    function test_deployProxyAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
         address logic2 = address(new LogicNonexistentUUID());
 
         vm.expectRevert();

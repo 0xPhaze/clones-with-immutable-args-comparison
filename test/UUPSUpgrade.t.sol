@@ -201,7 +201,7 @@ contract TestUUPSUpgrade is Test {
 
     /// call a reverting function during upgrade
     /// make sure the error is returned
-    function testFuzz_upgradeToAndCall_fail_initRevertsCustomMessage(string memory message) public {
+    function test_upgradeToAndCall_fail_initRevertsCustomMessage(string memory message) public {
         vm.expectRevert(bytes(message));
 
         bytes memory initCalldata = abi.encodeWithSelector(LogicV2.initRevertsCustomMessage.selector, message);
@@ -210,14 +210,14 @@ contract TestUUPSUpgrade is Test {
     }
 
     /// upgrade to an invalid address (EOA)
-    function testFuzz_upgradeToAndCall_fail_NotAContract(bytes memory initCalldata) public {
+    function test_upgradeToAndCall_fail_NotAContract(bytes memory initCalldata) public {
         vm.expectRevert(NotAContract.selector);
 
         LogicV1(proxy).upgradeToAndCall(bob, initCalldata);
     }
 
     /// upgrade to contract with an invalid uuid
-    function testFuzz_upgradeToAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
+    function test_upgradeToAndCall_fail_InvalidUUID(bytes memory initCalldata) public {
         address logic = address(new LogicInvalidUUID());
 
         vm.expectRevert(InvalidUUID.selector);
@@ -226,7 +226,7 @@ contract TestUUPSUpgrade is Test {
     }
 
     /// upgrade to a contract that doesn't implement proxiableUUID
-    function testFuzz_upgradeToAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
+    function test_upgradeToAndCall_fail_NonexistentUUID(bytes memory initCalldata) public {
         address logic = address(new LogicNonexistentUUID());
 
         vm.expectRevert();

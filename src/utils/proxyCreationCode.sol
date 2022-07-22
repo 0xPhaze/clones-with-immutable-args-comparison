@@ -47,8 +47,6 @@ function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes
         /// if iszero(success) { revert(0, returndatasize()) }
 
         REVERT_ON_FAILURE(pc)                       //                  | imp                       | ...
-
-        // RETURN_REVERT_REASON_ON_FAILURE_TEST(pc)                       //                  | imp                       | ...
     );
 }
 
@@ -81,7 +79,7 @@ function proxyCreationCode(
         creationCode = abi.encodePacked(
             creationCode, 
             initCallcode(pc, initCalldata)
-            );
+        );
 
         // update program counter
         pc = creationCode.length;

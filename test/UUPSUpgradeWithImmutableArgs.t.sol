@@ -149,7 +149,7 @@ contract TestImmutableArgs is Test {
     address logic;
 
     function setUp() public {
-        logic = address(new MockUUPSUpgrade(1));
+        logic = address(new MockUUPSUpgrade());
     }
 
     /* ------------- helpers ------------- */
@@ -340,7 +340,7 @@ contract TestImmutableArgs is Test {
 // re-run all tests from "./UUPSUpgrade.t.sol" for proxy with immutable args
 // ---------------------------------------------------------------------
 
-import {TestUUPSUpgrade, LogicV1, LogicV2} from "./UUPSUpgrade.t.sol";
+import {TestUUPSUpgrade} from "./UUPSUpgrade.t.sol";
 
 contract TestUUPSUpgradeWithImmutableArgs is TestUUPSUpgrade {
     function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {
@@ -365,8 +365,8 @@ contract TestERC1967WithImmutableArgs is TestERC1967 {
     ProxyTestDeployer deployer;
 
     function setUp() public override {
-        super.setUp();
         deployer = new ProxyTestDeployer();
+        super.setUp();
     }
 
     function deployProxyAndCall(address implementation, bytes memory initCalldata) internal override returns (address) {

@@ -13,7 +13,7 @@ import "/ERC1967Proxy.sol";
 
 error RevertOnInit();
 
-contract Logic is MockUUPSUpgrade(1) {
+contract Logic is MockUUPSUpgrade {
     uint256 public initializedCount;
 
     function init() public {

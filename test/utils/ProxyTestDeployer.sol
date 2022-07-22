@@ -23,6 +23,8 @@ contract ProxyTestDeployer {
 
     /// @notice Should only be used for testing
     /// @notice Reads encoded revert reason in deployed bytecode
+    /// @dev This requires `RETURN_REVERT_REASON_ON_FAILURE_TEST`
+    /// @dev to be inserted in `initCallcode` to function properly
     function deployCodeBubbleUpRevertReason(bytes memory bytecode) internal returns (address payable addr) {
         assembly {
             addr := create(0, add(bytecode, 0x20), mload(bytecode))

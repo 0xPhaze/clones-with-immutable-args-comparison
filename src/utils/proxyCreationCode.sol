@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../ERC1967Proxy.sol";
+import {ERC1822, ERC1967_PROXY_STORAGE_SLOT, UPGRADED_EVENT_SIG} from "../ERC1967Proxy.sol";
 import {utils} from "./utils.sol";
 
+error InvalidUUID();
+error NotAContract();
 error InvalidOffset(uint256 expected, uint256 actual);
 error ExceedsMaxArgSize(uint256 size);
 

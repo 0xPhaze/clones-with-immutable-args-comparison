@@ -6,12 +6,13 @@ import {verifyIsProxiableContract, proxyRuntimeCode, proxyCreationCode} from "./
 /// @title Library for deploying ERC1967 proxies with immutable args
 /// @author phaze (https://github.com/0xPhaze/proxies-with-immutable-args)
 /// @notice Inspired by (https://github.com/wighawag/clones-with-immutable-args)
-/// @notice Supports up to 3 bytes32 "immutable" arguments
-/// @notice These contracts are "verifiable" through etherscan
+/// @notice The implementation contract can be "read as a proxy" on etherscan
 /// @dev Arguments are appended to calldata on any call
 library LibERC1967ProxyWithImmutableArgs {
     /// @notice Deploys an ERC1967 proxy with immutable bytes args (max. 2^16 - 1 bytes)
     /// @notice This contract is not verifiable on etherscan
+    /// @notice However, the proxy can be marked as a proxy
+    /// @notice with "Read/Write as a proxy" tabs showing up on etherscan
     /// @param implementation address points to the implementation contract
     /// @param immutableArgs bytes array of immutable args
     /// @return addr address of the deployed proxy

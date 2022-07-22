@@ -32,7 +32,7 @@ contract Logic is MockUUPSUpgrade(1) {
 contract LogicNonexistentUUID {}
 
 contract LogicInvalidUUID {
-    bytes32 public proxiableUUID = bytes32(0x1234);
+    bytes32 public proxiableUUID = bytes32(uint256(0x1234));
 }
 
 // ---------------------------------------------------------------------

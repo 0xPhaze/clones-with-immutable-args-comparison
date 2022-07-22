@@ -32,7 +32,7 @@ contract Logic is MockUUPSUpgrade(1) {
 contract LogicNonexistentUUID {}
 
 contract LogicInvalidUUID {
-    bytes32 public proxiableUUID = 0x0000000000000000000000000000000000000000000000000000000000001234;
+    bytes32 public proxiableUUID = bytes32(0x1234);
 }
 
 // ---------------------------------------------------------------------
@@ -42,13 +42,8 @@ contract LogicInvalidUUID {
 contract TestERC1967 is Test {
     event Upgraded(address indexed implementation);
 
-    address bob = address(0xb0b);
-    address alice = address(0xbabe);
-    address tester = address(this);
-
-    address proxy;
-
     Logic logic;
+    address proxy;
 
     function deployProxyAndCall(address implementation, bytes memory initCalldata) internal virtual returns (address) {
         return address(new ERC1967Proxy(address(implementation), initCalldata));
@@ -56,6 +51,11 @@ contract TestERC1967 is Test {
 
     function setUp() public virtual {
         logic = new Logic();
+    }
+
+    function test_setUp() public virtual {
+        assertEq(UPGRADED_EVENT_SIG, keccak256("Upgraded(address)"));
+        assertEq(ERC1967_PROXY_STORAGE_SLOT, bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
     }
 
     /* ------------- deployProxyAndCall() ------------- */
@@ -99,7 +99,7 @@ contract TestERC1967 is Test {
     function test_deployProxyAndCall_fail_NotAContract(bytes memory initCalldata) public {
         vm.expectRevert(NotAContract.selector);
 
-        proxy = deployProxyAndCall(bob, initCalldata);
+        proxy = deployProxyAndCall(address(0xb0b), initCalldata);
     }
 
     /// deploy and upgrade to contract with an invalid uuid

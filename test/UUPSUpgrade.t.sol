@@ -68,13 +68,9 @@ contract LogicInvalidUUID {
 contract TestUUPSUpgrade is Test {
     event Upgraded(address indexed implementation);
 
-    address bob = address(0xb0b);
-    address alice = address(0xbabe);
-    address tester = address(this);
-
-    address proxy;
     LogicV1 logicV1;
     LogicV2 logicV2;
+    address proxy;
 
     function deployProxyAndCall(address implementation, bytes memory initCalldata) internal virtual returns (address) {
         return address(new ERC1967Proxy(address(implementation), initCalldata));
@@ -213,7 +209,7 @@ contract TestUUPSUpgrade is Test {
     function test_upgradeToAndCall_fail_NotAContract(bytes memory initCalldata) public {
         vm.expectRevert(NotAContract.selector);
 
-        LogicV1(proxy).upgradeToAndCall(bob, initCalldata);
+        LogicV1(proxy).upgradeToAndCall(address(0xb0b), initCalldata);
     }
 
     /// upgrade to contract with an invalid uuid

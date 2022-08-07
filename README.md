@@ -3,6 +3,13 @@
 This is a library for deploying ERC1967 proxies (usable with UUPSUpgrade)
 that contain "immutable args".
 
+## Warning
+
+Upgradeable proxies containing immutable args might not be the smartest choice if the implementation contract is subject to change.
+This work was mostly carried out as an exercise, though the result is fully functional.
+One benefit over "clones with immutable args" is that etherscan can detect these contracts as proxies and verify the source.
+Though this could likely also be mocked in clones that return the implementation address when `proxiableUUID()` is called.
+
 ## Contracts
 
 ```ml

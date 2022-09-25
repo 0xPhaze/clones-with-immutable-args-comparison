@@ -1,24 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC1822, ERC1967_PROXY_STORAGE_SLOT, UPGRADED_EVENT_SIG} from "../ERC1967Proxy.sol";
 import {utils} from "./utils.sol";
 
-error InvalidUUID();
-error NotAContract();
 error InvalidOffset(uint256 expected, uint256 actual);
 error ExceedsMaxArgSize(uint256 size);
-
-/// @notice Verifies that implementation contract conforms to ERC1967
-/// @notice This can be part of creationCode, but doesn't have to be
-/// @param implementation address containing the implementation logic
-function verifyIsProxiableContract(address implementation) view {
-    if (implementation.code.length == 0) revert NotAContract();
-
-    bytes32 uuid = ERC1822(implementation).proxiableUUID();
-
-    if (uuid != ERC1967_PROXY_STORAGE_SLOT) revert InvalidUUID();
-}
 
 /// @dev Expects `implementation` (imp) to be on top of the stack
 /// @dev Must leave a copy of `implementation` (imp) on top of the stack
@@ -29,7 +15,7 @@ function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes
     code = abi.encodePacked(
         // push initCalldata to stack in 32 bytes chunks and store in memory at pos 0 
 
-        MSTORE(0, initCalldata),                    // MSTORE icd       |                           | [0, ics) = initcalldata
+        MCOPY(0, initCalldata),                    // MCOPY icd       |                           | [0, ics) = initcalldata
 
         /// let success := delegatecall(gas(), implementation, 0, initCalldataSize, 0, 0)
 
@@ -56,25 +42,12 @@ function initCallcode(uint256 pc, bytes memory initCalldata) pure returns (bytes
 /// @param implementation address containing the implementation logic
 /// @param runtimeCode evm bytecode (runtime + concatenated extra data)
 /// @return creationCode evm bytecode that deploys ERC1967 proxy runtimeCode
-function proxyCreationCode(
+function cloneCreationCode(
     address implementation,
     bytes memory runtimeCode,
     bytes memory initCalldata
 ) pure returns (bytes memory creationCode) {
     uint256 pc; // program counter
-
-    creationCode = abi.encodePacked(
-        /// log2(0, 0, UPGRADED_EVENT_SIG, logic)
-
-        hex"73", implementation,                    // PUSH20 imp       | imp
-        hex"80"                                     // DUP1             | imp imp
-        hex"7f", UPGRADED_EVENT_SIG,                // PUSH32 ues       | ues imp imp
-        hex"3d"                                     // RETURNDATASIZE   | 00  ues imp imp
-        hex"3d"                                     // RETURNDATASIZE   | 00  00  ues imp imp
-        hex"a2"                                     // LOG2             | imp
-    );
-
-    pc = creationCode.length;
 
     // optional: insert code to call implementation contract with initCalldata during contract creation
     if (initCalldata.length != 0) {
@@ -94,13 +67,14 @@ function proxyCreationCode(
 
     // runtimeOffset: runtime code location 
     //                = current pc + size of next block
-    uint16 rto = uint16(pc + 45);
+    uint16 rto = uint16(pc + 11);
 
     creationCode = abi.encodePacked( creationCode,
-        /// sstore(ERC1967_PROXY_STORAGE_SLOT, implementation)
+        // /// sstore(ERC1967_PROXY_STORAGE_SLOT, implementation)
 
-        hex"7f", ERC1967_PROXY_STORAGE_SLOT,        // PUSH32 pss       | pss imp
-        hex"55"                                     // SSTORE           | 
+        // hex"73", implementation,                    // PUSH20 imp       | imp
+        // hex"7f", ERC1967_PROXY_STORAGE_SLOT,        // PUSH32 pss       | pss imp
+        // hex"55"                                     // SSTORE           | 
 
         /// codecopy(0, rto, rts)
 
@@ -127,14 +101,13 @@ function proxyCreationCode(
 /// @notice Returns the runtime code for an ERC1967 proxy with immutable args (max. 2^16 - 1 bytes)
 /// @param args immutable args byte array
 /// @return runtimeCode evm bytecode
-function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeCode) {
+function cloneRuntimeCode(address implementation, bytes memory args) pure returns (bytes memory runtimeCode) {
     uint16 extraDataSize = uint16(args.length) + 2; // 2 extra bytes for the storing the size of the args
 
-    uint8 argsCodeOffset = 0x48; // length of the runtime code
+    uint8 argsCodeOffset = 0x3b; // length of the runtime code
 
     uint8 returnJumpLocation = argsCodeOffset - 5;
 
-    // @note: uses codecopy, room to optimize by directly encoding immutableArgs into bytecode
     runtimeCode = abi.encodePacked(
         /// calldatacopy(0, 0, calldatasize())
 
@@ -157,12 +130,11 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
         hex"36"                                     // CALLDATASIZE     | cds xds 00  00            | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
         hex"01"                                     // ADD              | tcs 00  00                | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
 
-        /// success := delegatecall(gas(), sload(ERC1967_PROXY_STORAGE_SLOT), 0, tcs, 0, 0)
+        /// success := delegatecall(gas(), implementation, 0, tcs, 0, 0)
 
         hex"3d"                                     // RETURNDATASIZE   | 00  tcs 00  00            | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
-        hex"7f", ERC1967_PROXY_STORAGE_SLOT,        // PUSH32 pss       | pss 00  tcs 00 00         | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
-        hex"54"                                     // SLOAD            | pxa 00  tcs 00  00        | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
-        hex"5a"                                     // GAS              | gas pxa 00  tcs 00  00    | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"73", implementation,                    // PUSH20 imp       | imp 00  tcs 00 00         | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"5a"                                     // GAS              | gas imp 00  tcs 00  00    | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
         hex"f4"                                     // DELEGATECALL     | scs                       | ...
 
         /// returndatacopy(0, 0, returndatasize())
@@ -198,9 +170,200 @@ function proxyRuntimeCode(bytes memory args) pure returns (bytes memory runtimeC
 
     ); // prettier-ignore
 
-    // just a sanity check for for jump locations
-    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset, runtimeCode.length);
+    // sanity check for for jump locations
+    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset + extraDataSize, runtimeCode.length);
+    if (runtimeCode[returnJumpLocation] != 0x5b) revert InvalidOffset(argsCodeOffset + extraDataSize, runtimeCode.length);
 }
+
+function cloneRuntimeCode2(address implementation, bytes memory args) pure returns (bytes memory runtimeCode) {
+    uint16 extraDataSize = uint16(args.length) + 2; // 2 extra bytes for the storing the size of the args
+
+    uint8 argsCodeOffset = 0x30; // length of the runtime code
+
+    uint8 returnJumpLocation = argsCodeOffset - 5;
+
+    runtimeCode = abi.encodePacked(
+        /// calldatacopy(0, 0, calldatasize())
+
+        hex"36"                                     // CALLDATASIZE     | cds                       |
+        hex"3d"                                     // RETURNDATASIZE   | 00  cds                   |
+        hex"3d"                                     // RETURNDATASIZE   | 00  00  cds               |
+        hex"37"                                     // CALLDATACOPY     |                           | [0, cds) = calldata
+
+        /// success := delegatecall(gas(), implementation, 0, cds, 0, 0)
+
+        hex"3d"                                     // RETURNDATASIZE   | 00                        | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"3d"                                     // RETURNDATASIZE   | 00  00                    | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"36"                                     // CALLDATASIZE     | cds 00  00                     |
+        hex"3d"                                     // RETURNDATASIZE   | 00  cds 00  00            | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"73", implementation,                    // PUSH20 imp       | imp 00  cds 00 00         | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"5a"                                     // GAS              | gas imp 00  cds 00  00    | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"f4"                                     // DELEGATECALL     | scs                       | ...
+
+        /// returndatacopy(0, 0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds scs                   | ...
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds scs               | ...
+        hex"80"                                     // DUP1             | 00  00  rds scs           | ...
+        hex"3e"                                     // RETURNDATACOPY   | scs                       | [0, rds) = returndata
+
+        /// if success { jump(rtn) }
+
+        hex"60", returnJumpLocation,                // PUSH1 rtn        | rtn scs                   | [0, rds) = returndata
+        hex"57"                                     // JUMPI            |                           | [0, rds) = returndata
+
+        /// revert(0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds) = returndata
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0, rds) = returndata
+        hex"fd"                                     // REVERT           |                           | 
+
+        /// return(0, returndatasize())
+
+        hex"5b"                                     // JUMPDEST         |                           | [0, rds) = returndata
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds) = returndata
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0, rds) = returndata
+        hex"f3",                                    // RETURN           |                           | ...
+
+        // unreachable code: 
+        // append args and args length for later use
+
+        args,
+        uint16(args.length)
+
+    ); // prettier-ignore
+
+    // sanity check for for jump locations
+    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset + extraDataSize, runtimeCode.length);
+    if (runtimeCode[returnJumpLocation] != 0x5b) revert InvalidOffset(argsCodeOffset + extraDataSize, runtimeCode.length);
+}
+
+function cloneRuntimeCode3(address implementation, bytes memory args) pure returns (bytes memory runtimeCode) {
+    uint16 extraDataSize = uint16(args.length) + 2; // 2 extra bytes for the storing the size of the args
+
+    uint8 argsCodeOffset = 0x5a; // length of the runtime code
+
+    uint8 returnJumpLocation = argsCodeOffset - 5;
+
+    uint8 returnIALocation = argsCodeOffset - 5 - 28;
+
+    runtimeCode = abi.encodePacked(
+        /// if eq(shr(224, calldataload(0)), 0x33333333) { jump }
+
+        hex"3d"                                     // RETURNDATASIZE   | 00
+        hex"35"                                     // CALLDATALOAD     | cd0
+        hex"60" hex"e0"                             // PUSH1 e0         | e0  cd0
+        hex"1c"                                     // SHR              | sel
+        hex"63" hex"33333333"                       // PUSH1 33333333   | 33.. sel
+        hex"14"                                     // EQ               | cond
+
+        hex"60", returnIALocation,                  // PUSH1 IAL        | ial cond 
+        hex"57"                                     // JUMPI            | 
+
+
+        /// calldatacopy(0, 0, calldatasize())
+
+        hex"36"                                     // CALLDATASIZE     | cds                       |
+        hex"3d"                                     // RETURNDATASIZE   | 00  cds                   |
+        hex"3d"                                     // RETURNDATASIZE   | 00  00  cds               |
+        hex"37"                                     // CALLDATACOPY     |                           | [0, cds = calldata
+
+
+        /// success := delegatecall(gas(), implementation, 0, cds, 0, 0)
+
+        hex"3d"                                     // RETURNDATASIZE   | 00                        | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"3d"                                     // RETURNDATASIZE   | 00  00                    | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"36"                                     // CALLDATASIZE     | cds 00  00                     |
+        hex"3d"                                     // RETURNDATASIZE   | 00  cds 00  00            | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"73", implementation,                    // PUSH20 imp       | imp 00  cds 00 00         | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"5a"                                     // GAS              | gas imp 00  cds 00  00    | [0, cds) = calldata, [cds, cds + xds] = args + byte2(argSize)
+        hex"f4"                                     // DELEGATECALL     | scs                       | ...
+
+        /// returndatacopy(0, 0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds scs                   | ...
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds scs               | ...
+        hex"80"                                     // DUP1             | 00  00  rds scs           | ...
+        hex"3e"                                     // RETURNDATACOPY   | scs                       | [0, rds) = returndata
+
+        /// if success { jump(rtn) }
+
+        hex"60", returnJumpLocation,                // PUSH1 rtn        | rtn scs                   | [0, rds) = returndata
+        hex"57"                                     // JUMPI            |                           | [0, rds) = returndata
+
+        /// revert(0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds) = returndata
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0, rds) = returndata
+        hex"fd"                                     // REVERT           |                           | 
+
+
+
+        /// [returnIALocation]
+
+        hex"5b"                                     // JUMPDEST         |                           | [0, rds) = returndata
+
+
+        /// codecopy(30, sub(codesize(), 2), 2)
+        /// offset := sub(sub(codesize(), 2), mload(0))
+        /// codecopy(0, add(offset, readOffset), readSize)
+
+        hex"60" hex"02"                             // PUSH1 02         | 02
+        hex"38"                                     // CODESIZE         | csz 02    
+        hex"03"                                     // SUB              | cs2 
+
+        hex"60" hex"02"                             // PUSH1 02         | 02  cs2
+        hex"81"                                     // DUP2             | cs2 02  cs2
+
+        hex"60" hex"1e"                             // PUSH1 30         | 30  cs2 02  cs2
+        hex"39"                                     // CODECOPY         | cs2                   | [ias]
+
+        hex"3d"                                     // RETURNDATASIZE   | 00  cs2
+        hex"51"                                     // MLOAD            | ias cs2
+        hex"90"                                     // SWAP1            | cs2 ias
+        hex"03"                                     // SUB              | off 
+
+        hex"60" hex"04"                             // PUSH1 04         | 04  off
+        hex"35"                                     // CALLDATALOAD     | rof off 
+        hex"01"                                     // ADD              | iro    (read ia code offset) 
+
+        hex"60" hex"24"                             // PUSH1 24         | 24  iro
+        hex"35"                                     // CALLDATALOAD     | irs iro 
+        hex"80"                                     // DUP1             | irs irs iro
+        hex"91"                                     // SWAP2            | iro irs irs
+        hex"3d"                                     // RETURNDATASIZE   | 00  iro irs irs
+        hex"39"                                     // CODECOPY         | irs                   | [immutableArgs]
+
+        /// return(0, readSize)
+
+        hex"3d"                                     // RETURNDATASIZE   | 00  irs
+        hex"f3"                                     // RETURN           | 
+
+
+        /// [returnJumpLocation]
+
+        hex"5b"                                     // JUMPDEST         |                           | [0, rds) = returndata
+
+        /// return(0, returndatasize())
+
+        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds) = returndata
+        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0, rds) = returndata
+        hex"f3",                                    // RETURN           |                           | ...
+
+        // unreachable code: 
+        // append args and args length for later use
+
+        args,
+        uint16(args.length)
+
+    ); // prettier-ignore
+
+    // sanity check for for jump locations
+    if (runtimeCode.length != argsCodeOffset + extraDataSize) revert InvalidOffset(argsCodeOffset + extraDataSize, runtimeCode.length);
+    if (runtimeCode[returnJumpLocation] != 0x5b) revert InvalidOffset(argsCodeOffset + extraDataSize, runtimeCode.length);
+    if (runtimeCode[returnIALocation] != 0x5b) revert InvalidOffset(returnIALocation, runtimeCode.length);
+}
+
 
 // ---------------------------------------------------------------------
 // Snippets
@@ -235,57 +398,9 @@ function REVERT_ON_FAILURE(uint256 pc) pure returns (bytes memory code) {
     );
 }
 
-/// @notice expects call `success` (scs) bool to be on top of stack
-/// @notice using this for testing
-// apparently you can't revert any returndata 
-// messages when using CREATE (returndatasize() is always 0)
-// that's why I'm encoding it in the returndata
-function RETURN_REVERT_REASON_ON_FAILURE_TEST(uint256 pc) pure returns (bytes memory code) {
-    // upper bound for when end location requires 32 bytes
-    uint256 pushNumBytes = utils.getRequiredBytes(pc + 38);
 
-    // jump location to continue in code
-    uint256 end = pc + pushNumBytes + 19;
-
-    code = abi.encodePacked(
-        /// if success { jump(end) }
-
-        PUSHX(end, pushNumBytes),                   // PUSH1 end        | end scs 
-        hex"57"                                     // JUMPI            |         
-
-        /// mstore(0, 0)
-
-        hex"60" hex"00"                             // PUSH1 00         | 00
-        hex"80"                                     // DUP1 80          | 80  00
-        hex"52"                                     // MSTORE           |                           | [0] = 00 (STOP opcode; identifier for encoding reverted call reason)
-
-
-        /// returndatacopy(1, 0, returndatasize())
-
-        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0] = 00
-        hex"60" hex"00"                             // PUSH1 00         | 00  rds                   | [0] = 00
-        hex"60" hex"01"                             // PUSH1 01         | 01  00  rds               | [0] = 00
-        hex"3e"                                     // RETURNDATACOPY   |                           | [0] = 00
-
-
-        /// return(0, 1 + returndatasize())
-
-        hex"3d"                                     // RETURNDATASIZE   | rds                       | [0, rds + 20) = encoded revert reason
-        hex"60" hex"01"                             // PUSH1 01         | 01  rds                   | [0, rds + 20) = encoded revert reason
-        hex"01"                                     // ADD              | eds                       | [0, rds + 20) = encoded revert reason
-        hex"60" hex"00"                             // PUSH1 00         | 00  eds
-        hex"f3"                                     // RETURN           |        
-
-        hex"5b"                                     // JUMPDEST         | 
-    );
-
-    // sanity check
-    if (end + 1 !=  pc + code.length) revert InvalidOffset(end + 1, pc + code.length);
-}
-
-
-/// @notice Mstore that copies bytes to memory offset in chunks of 32
-function MSTORE(uint256 offset, bytes memory data) pure returns (bytes memory code) {
+/// @notice Mcopy that copies bytes to memory offset in chunks of 32
+function MCOPY(uint256 offset, bytes memory data) pure returns (bytes memory code) {
 
     bytes32[] memory bytes32Data = utils.splitToBytes32(data);
 
@@ -297,7 +412,7 @@ function MSTORE(uint256 offset, bytes memory data) pure returns (bytes memory co
 
             hex"7f", bytes32Data[i],                // PUSH32 data      | data
             PUSHX(offset + i * 32),                 // PUSHX off        | off data
-            hex"52"                                 // MSTORE           |
+            hex"52"                                 // MCOPY           |
 
         ); // prettier-ignore
     }
@@ -308,7 +423,7 @@ function PUSHX(uint256 value) pure returns (bytes memory code) {
 }
 
 /// @notice Pushes value with the least required bytes onto stack
-/// @notice Probably overkill...
+/// @notice Overkill..
 function PUSHX(uint256 value, uint256 numBytes) pure returns (bytes memory code) {
     if (numBytes == 1) code = abi.encodePacked(hex"60", uint8(value));
     else if (numBytes == 2) code = abi.encodePacked(hex"61", uint16(value));
